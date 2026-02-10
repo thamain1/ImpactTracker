@@ -16,8 +16,10 @@ import {
   Cell
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin } from "lucide-react";
+import { ArrowLeft, MapPin, Download } from "lucide-react";
 import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { api } from "@shared/routes";
 
 const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6", "#ec4899"];
 
@@ -85,7 +87,17 @@ export default function ProgramDetails() {
             <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">{program.name}</h1>
             <p className="text-lg text-slate-600 max-w-3xl">{program.description}</p>
           </div>
-          <AddImpactDialog program={program} />
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank")}
+              data-testid="button-export-csv"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export CSV
+            </Button>
+            <AddImpactDialog program={program} />
+          </div>
         </div>
       </div>
 

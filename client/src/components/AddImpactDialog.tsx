@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Plus, Loader2 } from "lucide-react";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import { Plus, Loader2, Lightbulb } from "lucide-react";
 import type { ProgramResponse } from "@shared/routes";
 
 interface AddImpactDialogProps {
@@ -19,12 +20,23 @@ interface AddImpactDialogProps {
 
 const formSchema = insertImpactEntrySchema.extend({
   programId: z.coerce.number(),
-  // Metric values will be handled as a dynamic object in submit handler
+  zipCode: z.string().optional(),
+  demographics: z.string().optional(),
+  outcomes: z.string().optional(),
 });
+
+const GEO_SUGGESTIONS: Record<string, string[]> = {
+  SPA: ["SPA 1 - Antelope Valley", "SPA 2 - San Fernando", "SPA 3 - San Gabriel", "SPA 4 - Metro", "SPA 5 - West", "SPA 6 - South", "SPA 7 - East", "SPA 8 - South Bay"],
+  City: ["Los Angeles", "Long Beach", "Pasadena", "Santa Monica", "Glendale", "Burbank"],
+  County: ["Los Angeles County", "Orange County", "San Bernardino County", "Riverside County", "Ventura County"],
+  State: ["California", "Oregon", "Washington", "Arizona", "Nevada"],
+};
 
 export function AddImpactDialog({ program }: AddImpactDialogProps) {
   const [open, setOpen] = useState(false);
   const createImpact = useCreateImpactEntry();
+  const [metricInputs, setMetricInputs] = useState<Record<string, string>>({});
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -33,30 +45,25 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
       date: new Date().toISOString().split("T")[0],
       geographyLevel: "City" as const,
       geographyValue: "",
+      zipCode: "",
+      demographics: "",
+      outcomes: "",
       metricValues: {} as Record<string, number>,
     },
   });
 
-  // Manage metric inputs separately since they are dynamic JSON
-  const [metricInputs, setMetricInputs] = useState<Record<string, string>>({});
+  const geoLevel = form.watch("geographyLevel");
+  const suggestions = GEO_SUGGESTIONS[geoLevel] || [];
 
   const onSubmit = (values: any) => {
-    // Convert string inputs to numbers for the JSON payload
     const numericMetrics: Record<string, number> = {};
-    
     program.metrics.forEach((metric) => {
       const val = metricInputs[metric.name];
-      if (val) {
-        numericMetrics[metric.name] = parseFloat(val);
-      }
+      if (val) numericMetrics[metric.name] = parseFloat(val);
     });
 
     createImpact.mutate(
-      {
-        ...values,
-        programId: program.id,
-        metricValues: numericMetrics,
-      },
+      { ...values, programId: program.id, metricValues: numericMetrics },
       {
         onSuccess: () => {
           setOpen(false);
@@ -67,30 +74,34 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
     );
   };
 
+  const hasEmptyMetrics = program.metrics.some(m => !metricInputs[m.name]);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-accent hover:bg-accent/90 text-white font-semibold shadow-lg shadow-accent/20">
+        <Button data-testid="button-log-impact">
           <Plus className="w-4 h-4 mr-2" />
           Log Impact
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="font-heading text-xl">Log Impact Data</DialogTitle>
+          <p className="text-sm text-muted-foreground">Record your program's impact for a specific date and location.</p>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 mt-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 mt-4">
+            {/* Date & Geography */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="date"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Reporting Date</FormLabel>
+                    <FormLabel>Service Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...field} data-testid="input-impact-date" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -102,10 +113,10 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
                 name="geographyLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Geo Level</FormLabel>
+                    <FormLabel>Geography Level</FormLabel>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger data-testid="select-geo-level">
                           <SelectValue placeholder="Select level" />
                         </SelectTrigger>
                       </FormControl>
@@ -127,16 +138,45 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
               name="geographyValue"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Geography Name</FormLabel>
+                  <FormLabel>Location Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Los Angeles, SPA 6, etc." {...field} />
+                    <Input placeholder="e.g. Los Angeles, SPA 6, etc." {...field} data-testid="input-geo-value" />
+                  </FormControl>
+                  {suggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {suggestions.slice(0, 4).map(s => (
+                        <button
+                          key={s}
+                          type="button"
+                          className="text-xs px-2 py-0.5 bg-muted rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                          onClick={() => form.setValue("geographyValue", s)}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="zipCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ZIP Code (optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. 90012" {...field} value={field.value || ""} data-testid="input-zip" />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            <div className="space-y-4 border-t pt-4">
+            {/* Impact Metrics */}
+            <div className="space-y-3 border-t pt-4">
               <h4 className="font-medium text-sm text-muted-foreground">Impact Metrics</h4>
               {program.metrics.map((metric) => (
                 <div key={metric.id} className="grid grid-cols-3 items-center gap-4">
@@ -150,13 +190,67 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
                     value={metricInputs[metric.name] || ""}
                     onChange={(e) => setMetricInputs(prev => ({ ...prev, [metric.name]: e.target.value }))}
                     className="col-span-1"
+                    data-testid={`input-metric-${metric.id}`}
                   />
                 </div>
               ))}
+
+              {hasEmptyMetrics && (
+                <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg text-amber-800 text-xs">
+                  <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>Missing some metrics? We'll record 0 for any you leave blank. You can update these later.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Demographics & Outcomes */}
+            <div className="space-y-3 border-t pt-4">
+              <h4 className="font-medium text-sm text-muted-foreground">Additional Context (Optional)</h4>
+              <FormField
+                control={form.control}
+                name="demographics"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Demographics</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="e.g. 60% female, 40% male; 70% Hispanic/Latino; Ages 25-54"
+                        {...field}
+                        value={field.value || ""}
+                        className="h-16"
+                        data-testid="input-demographics"
+                      />
+                    </FormControl>
+                    <FormDescription>Describe the demographics of participants served.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="outcomes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Outcomes / Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="e.g. 95% of participants reported improved food security; 3 families connected to housing resources"
+                        {...field}
+                        value={field.value || ""}
+                        className="h-16"
+                        data-testid="input-outcomes"
+                      />
+                    </FormControl>
+                    <FormDescription>Notable results or observations from this reporting period.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             <div className="flex justify-end pt-4">
-              <Button type="submit" disabled={createImpact.isPending} className="w-full sm:w-auto">
+              <Button type="submit" disabled={createImpact.isPending} className="w-full sm:w-auto" data-testid="button-save-impact">
                 {createImpact.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />

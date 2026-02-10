@@ -11,7 +11,10 @@ import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Programs from "@/pages/Programs";
 import ProgramDetails from "@/pages/ProgramDetails";
+import ProgramWizard from "@/pages/ProgramWizard";
 import Reports from "@/pages/Reports";
+import AdminDashboard from "@/pages/AdminDashboard";
+import Settings from "@/pages/Settings";
 import NotFound from "@/pages/not-found";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -66,12 +69,24 @@ function Router() {
         <ProtectedRoute component={Programs} />
       </Route>
 
+      <Route path="/programs/new">
+        <ProtectedRoute component={ProgramWizard} />
+      </Route>
+
       <Route path="/programs/:id">
         <ProtectedRoute component={ProgramDetails} />
       </Route>
 
       <Route path="/reports">
         <ProtectedRoute component={Reports} />
+      </Route>
+
+      <Route path="/admin">
+        <ProtectedRoute component={AdminDashboard} />
+      </Route>
+
+      <Route path="/settings">
+        <ProtectedRoute component={Settings} />
       </Route>
 
       <Route component={NotFound} />

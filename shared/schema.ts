@@ -12,6 +12,10 @@ export const organizations = pgTable("organizations", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  address: text("address"),
+  phone: text("phone"),
+  website: text("website"),
+  contactEmail: text("contact_email"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -28,25 +32,35 @@ export const programs = pgTable("programs", {
   orgId: integer("org_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   description: text("description"),
+  type: text("type"),
+  status: text("status", { enum: ["active", "completed", "draft"] }).notNull().default("active"),
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  targetPopulation: text("target_population"),
+  goals: text("goals"),
+  locations: text("locations"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const impactMetrics = pgTable("impact_metrics", {
   id: serial("id").primaryKey(),
   programId: integer("program_id").notNull().references(() => programs.id),
-  name: text("name").notNull(), // e.g. "Meals Served"
-  unit: text("unit").notNull(), // e.g. "meals"
+  name: text("name").notNull(),
+  unit: text("unit").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const impactEntries = pgTable("impact_entries", {
   id: serial("id").primaryKey(),
   programId: integer("program_id").notNull().references(() => programs.id),
-  userId: varchar("user_id").notNull().references(() => users.id), // Who entered it
-  date: date("date").notNull(), // Reporting date
+  userId: varchar("user_id").notNull().references(() => users.id),
+  date: date("date").notNull(),
   geographyLevel: text("geography_level", { enum: ["SPA", "City", "County", "State"] }).notNull(),
-  geographyValue: text("geography_value").notNull(), // e.g. "SPA 6", "Los Angeles"
-  metricValues: jsonb("metric_values").notNull(), // { "metric_name": number } or { "metric_id": number }
+  geographyValue: text("geography_value").notNull(),
+  zipCode: text("zip_code"),
+  demographics: text("demographics"),
+  outcomes: text("outcomes"),
+  metricValues: jsonb("metric_values").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -84,10 +98,15 @@ export const impactEntriesRelations = relations(impactEntries, ({ one }) => ({
 // === BASE SCHEMAS ===
 
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
+export const updateOrganizationSchema = insertOrganizationSchema.partial();
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
-export const insertProgramSchema = createInsertSchema(programs).omit({ id: true, createdAt: true });
+export const insertProgramSchema = createInsertSchema(programs, {
+  startDate: z.string().optional().nullable().transform(v => v || null),
+  endDate: z.string().optional().nullable().transform(v => v || null),
+}).omit({ id: true, createdAt: true });
+export const updateProgramSchema = insertProgramSchema.partial();
 export const insertImpactMetricSchema = createInsertSchema(impactMetrics).omit({ id: true, createdAt: true });
-export const insertImpactEntrySchema = createInsertSchema(impactEntries).omit({ id: true, createdAt: true, userId: true }); // userId set by backend
+export const insertImpactEntrySchema = createInsertSchema(impactEntries).omit({ id: true, createdAt: true, userId: true });
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -98,14 +117,19 @@ export type ImpactMetric = typeof impactMetrics.$inferSelect;
 export type ImpactEntry = typeof impactEntries.$inferSelect;
 
 export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type UpdateOrganization = z.infer<typeof updateOrganizationSchema>;
 export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
 export type InsertProgram = z.infer<typeof insertProgramSchema>;
+export type UpdateProgram = z.infer<typeof updateProgramSchema>;
 export type InsertImpactMetric = z.infer<typeof insertImpactMetricSchema>;
 export type InsertImpactEntry = z.infer<typeof insertImpactEntrySchema>;
 
-// Complex Types
 export interface ProgramWithMetrics extends Program {
   metrics: ImpactMetric[];
+}
+
+export interface UserRoleWithUser extends UserRole {
+  user: { id: string; email: string | null; firstName: string | null; lastName: string | null } | null;
 }
 
 export interface ImpactReportData {
@@ -113,7 +137,7 @@ export interface ImpactReportData {
   programName: string;
   geographyLevel: string;
   geographyValue: string;
-  metrics: Record<string, number>; // Aggregated values
+  metrics: Record<string, number>;
 }
 
 export type CreateProgramRequest = InsertProgram & {
