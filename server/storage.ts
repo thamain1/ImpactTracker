@@ -1,10 +1,10 @@
 import { db } from "./db";
 import { 
-  organizations, programs, impactMetrics, impactEntries, userRoles, users,
+  organizations, programs, impactMetrics, impactEntries, userRoles, users, censusCache,
   type Organization, type Program, type ImpactMetric, type ImpactEntry, type UserRole,
   type InsertOrganization, type UpdateOrganization, type InsertProgram, type UpdateProgram,
   type InsertImpactMetric, type InsertImpactEntry,
-  type ProgramWithMetrics, type UserRoleWithUser
+  type ProgramWithMetrics, type UserRoleWithUser, type CensusCache
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -31,6 +31,11 @@ export interface IStorage {
   getImpactEntries(programId: number, geographyLevel?: string): Promise<ImpactEntry[]>;
   createImpactEntry(entry: InsertImpactEntry & { userId: string }): Promise<ImpactEntry>;
   getAllImpactEntries(): Promise<ImpactEntry[]>;
+
+  getCensusData(geographyLevel: string, geographyValue: string): Promise<CensusCache | undefined>;
+  upsertCensusData(data: Omit<CensusCache, "id" | "fetchedAt">): Promise<CensusCache>;
+
+  getDistinctGeographies(): Promise<{ level: string; value: string }[]>;
 
   getAdminStats(): Promise<{
     totalOrganizations: number;
@@ -99,7 +104,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserRole(orgId: number, userId: string, role: string): Promise<UserRole> {
-    const [newRole] = await db.insert(userRoles).values({ orgId, userId, role }).returning();
+    const [newRole] = await db.insert(userRoles).values({ orgId, userId, role: role as "admin" | "staff" }).returning();
     return newRole;
   }
 
@@ -155,7 +160,7 @@ export class DatabaseStorage implements IStorage {
   async getImpactEntries(programId: number, geographyLevel?: string): Promise<ImpactEntry[]> {
     if (geographyLevel) {
       return await db.select().from(impactEntries).where(
-        and(eq(impactEntries.programId, programId), eq(impactEntries.geographyLevel, geographyLevel))
+        and(eq(impactEntries.programId, programId), eq(impactEntries.geographyLevel, geographyLevel as any))
       ).orderBy(desc(impactEntries.createdAt));
     }
     return await db.select().from(impactEntries).where(eq(impactEntries.programId, programId)).orderBy(desc(impactEntries.createdAt));
@@ -168,6 +173,33 @@ export class DatabaseStorage implements IStorage {
 
   async getAllImpactEntries(): Promise<ImpactEntry[]> {
     return await db.select().from(impactEntries).orderBy(desc(impactEntries.createdAt));
+  }
+
+  async getCensusData(geographyLevel: string, geographyValue: string): Promise<CensusCache | undefined> {
+    const [result] = await db.select().from(censusCache)
+      .where(and(
+        eq(censusCache.geographyLevel, geographyLevel),
+        eq(censusCache.geographyValue, geographyValue)
+      ));
+    return result;
+  }
+
+  async upsertCensusData(data: Omit<CensusCache, "id" | "fetchedAt">): Promise<CensusCache> {
+    const existing = await this.getCensusData(data.geographyLevel, data.geographyValue);
+    if (existing) {
+      const [updated] = await db.update(censusCache).set({ ...data, fetchedAt: new Date() })
+        .where(eq(censusCache.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(censusCache).values(data).returning();
+    return created;
+  }
+
+  async getDistinctGeographies(): Promise<{ level: string; value: string }[]> {
+    const results = await db.execute(
+      sql`SELECT DISTINCT geography_level as level, geography_value as value FROM impact_entries`
+    );
+    return (results.rows || []) as { level: string; value: string }[];
   }
 
   async getAdminStats() {

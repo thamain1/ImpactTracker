@@ -4,12 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { Plus, Users, ArrowRight, Building2, BarChart3, MapPin, Globe2, FileBarChart } from "lucide-react";
+import { Plus, Users, ArrowRight, Building2, BarChart3, MapPin, Globe2, FileBarChart, TrendingUp, DollarSign, AlertTriangle, Info } from "lucide-react";
 import { usePrograms } from "@/hooks/use-programs";
 import { useAdminStats } from "@/hooks/use-admin";
+import { useCensusComparison } from "@/hooks/use-census";
 import { CreateOrgDialog } from "@/components/CreateOrgDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-800",
@@ -24,6 +26,7 @@ export default function Dashboard() {
   const firstOrgId = orgs?.[0]?.id;
   const { data: programs, isLoading: progsLoading } = usePrograms(firstOrgId);
   const { data: adminStats } = useAdminStats();
+  const { data: censusData, isLoading: censusLoading } = useCensusComparison();
 
   const isLoading = orgsLoading || progsLoading;
 
@@ -166,6 +169,132 @@ export default function Dashboard() {
                 </Card>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Census Comparison */}
+      {censusData && censusData.length > 0 && (
+        <div>
+          <h2 className="text-lg font-heading font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Your impact data compared against U.S. Census population estimates ({censusData[0]?.dataYear} ACS)
+          </p>
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-heading">Population Reach by Area</CardTitle>
+                </CardHeader>
+                <CardContent className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={censusData.filter(d => d.totalPopulation).map(d => ({
+                        name: d.geographyValue.length > 15 ? d.geographyValue.slice(0, 14) + "..." : d.geographyValue,
+                        fullName: d.geographyValue,
+                        impact: d.impactCount,
+                        population: d.totalPopulation,
+                        reach: d.reachPercent,
+                        level: d.geographyLevel,
+                      }))}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f1f5f9' }}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        formatter={(value: number, name: string) => {
+                          if (name === "impact") return [value.toLocaleString(), "Your Impact"];
+                          return [value.toLocaleString(), "Census Population"];
+                        }}
+                        labelFormatter={(label: string, payload: any) => payload?.[0]?.payload?.fullName || label}
+                      />
+                      <Bar dataKey="impact" name="impact" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="space-y-4">
+              {censusData.map((item, i) => (
+                <Card key={`${item.geographyLevel}-${item.geographyValue}`} data-testid={`census-card-${i}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{item.geographyLevel}</Badge>
+                      <span className="font-medium text-sm text-slate-800">{item.geographyValue}</span>
+                      {item.isApproximate && (
+                        <span title={item.approximateNote}>
+                          <Info className="w-3.5 h-3.5 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
+
+                    {item.totalPopulation && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-muted-foreground">Census Population</span>
+                          <span className="font-bold text-slate-900">{item.totalPopulation.toLocaleString()}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="text-muted-foreground">Your Impact</span>
+                          <span className="font-bold text-primary">{item.impactCount.toLocaleString()}</span>
+                        </div>
+                        {item.reachPercent !== null && (
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="text-muted-foreground">Population Reached</span>
+                            <span className="font-bold text-emerald-600">{item.reachPercent}%</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="mt-3 pt-3 border-t flex items-center justify-between gap-2 flex-wrap">
+                      {item.povertyRate !== null && (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Poverty Rate</span>
+                          <div className="font-bold text-slate-700 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-500" />
+                            {item.povertyRate}%
+                          </div>
+                        </div>
+                      )}
+                      {item.medianIncome !== null && (
+                        <div className="text-xs">
+                          <span className="text-muted-foreground">Median Income</span>
+                          <div className="font-bold text-slate-700 flex items-center gap-1">
+                            <DollarSign className="w-3 h-3 text-emerald-500" />
+                            ${item.medianIncome.toLocaleString()}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!item.totalPopulation && (
+                      <p className="text-xs text-muted-foreground italic">Census data not available for this area</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {censusLoading && adminStats?.byGeography && adminStats.byGeography.length > 0 && (
+        <div>
+          <h2 className="text-lg font-heading font-bold text-slate-900 mb-4 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
+          </h2>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
+            <Skeleton className="h-32" />
           </div>
         </div>
       )}

@@ -202,6 +202,68 @@ export const api = {
       },
     },
   },
+  census: {
+    comparison: {
+      method: 'GET' as const,
+      path: '/api/census/comparison' as const,
+      responses: {
+        200: z.array(z.object({
+          geographyLevel: z.string(),
+          geographyValue: z.string(),
+          impactCount: z.number(),
+          totalPopulation: z.number().nullable(),
+          povertyRate: z.number().nullable(),
+          medianIncome: z.number().nullable(),
+          reachPercent: z.number().nullable(),
+          isApproximate: z.boolean(),
+          approximateNote: z.string().optional(),
+          dataYear: z.number(),
+        })),
+      },
+    },
+    lookup: {
+      method: 'GET' as const,
+      path: '/api/census' as const,
+      input: z.object({
+        level: z.enum(["SPA", "City", "County", "State"]),
+        value: z.string(),
+      }),
+      responses: {
+        200: z.object({
+          geographyLevel: z.string(),
+          geographyValue: z.string(),
+          totalPopulation: z.number().nullable(),
+          povertyRate: z.number().nullable(),
+          medianIncome: z.number().nullable(),
+          isApproximate: z.boolean(),
+          approximateNote: z.string().optional(),
+          dataYear: z.number(),
+        }),
+      },
+    },
+    batch: {
+      method: 'POST' as const,
+      path: '/api/census/batch' as const,
+      input: z.object({
+        geographies: z.array(z.object({
+          level: z.string(),
+          value: z.string(),
+        })),
+      }),
+      responses: {
+        200: z.array(z.object({
+          geographyLevel: z.string(),
+          geographyValue: z.string(),
+          totalPopulation: z.number().nullable(),
+          povertyRate: z.number().nullable(),
+          medianIncome: z.number().nullable(),
+          isApproximate: z.boolean(),
+          approximateNote: z.string().optional(),
+          dataYear: z.number(),
+        })),
+      },
+    },
+  },
   admin: {
     stats: {
       method: 'GET' as const,

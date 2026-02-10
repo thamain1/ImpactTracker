@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { getCensusComparison, getCensusForGeographies } from "./services/census";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -213,6 +214,65 @@ export async function registerRoutes(
     res.send(csv);
   });
 
+  // === Census ===
+  app.get(api.census.comparison.path, isAuthenticated, async (req, res) => {
+    try {
+      const geographies = await storage.getDistinctGeographies();
+      const allEntries = await storage.getAllImpactEntries();
+
+      const impactCounts: Record<string, number> = {};
+      allEntries.forEach(entry => {
+        const key = `${entry.geographyLevel}:${entry.geographyValue}`;
+        const mv = entry.metricValues as Record<string, number>;
+        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        impactCounts[key] = (impactCounts[key] || 0) + total;
+      });
+
+      const censusResults = await getCensusForGeographies(geographies);
+
+      const comparison = censusResults.map(census => {
+        const key = `${census.geographyLevel}:${census.geographyValue}`;
+        const impact = impactCounts[key] || 0;
+        const reachPercent = census.totalPopulation && impact > 0
+          ? Math.round((impact / census.totalPopulation) * 10000) / 100
+          : null;
+
+        return {
+          ...census,
+          impactCount: impact,
+          reachPercent,
+        };
+      });
+
+      res.json(comparison);
+    } catch (err) {
+      console.error("Census comparison error:", err);
+      res.status(500).json({ message: "Failed to fetch census comparison" });
+    }
+  });
+
+  app.get(api.census.lookup.path, isAuthenticated, async (req, res) => {
+    const level = req.query.level as string;
+    const value = req.query.value as string;
+    if (!level || !value) return res.status(400).json({ message: "level and value are required" });
+
+    const result = await getCensusComparison(level, value);
+    res.json(result);
+  });
+
+  app.post(api.census.batch.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.census.batch.input.parse(req.body);
+      const results = await getCensusForGeographies(input.geographies);
+      res.json(results);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
   // === Admin Stats ===
   app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
     const stats = await storage.getAdminStats();
@@ -245,6 +305,7 @@ async function seedDatabase() {
       type: "Food Security",
       status: "active",
       startDate: "2024-01-01",
+      endDate: null,
       targetPopulation: "Low-income families",
       goals: "Serve 10,000 meals per quarter across all SPAs",
       locations: "Los Angeles County",
@@ -260,6 +321,7 @@ async function seedDatabase() {
       type: "Education",
       status: "active",
       startDate: "2024-03-15",
+      endDate: null,
       targetPopulation: "Youth ages 14-21",
       goals: "Match 200 mentees with mentors annually",
       locations: "SPA 6, SPA 8",
@@ -269,6 +331,50 @@ async function seedDatabase() {
       { name: "Graduations", unit: "students", programId: 0 }
     ]);
 
-    console.log("Database seeded with initial data.");
+    const allPrograms = await storage.getPrograms(org.id);
+    const foodBankId = allPrograms.find(p => p.name === "Community Food Bank")?.id;
+    const youthId = allPrograms.find(p => p.name === "Youth Mentorship Program")?.id;
+
+    if (foodBankId) {
+      const seedUserId = "seed-demo-user";
+      await storage.upsertUser({ id: seedUserId, email: "demo@demo-nonprofit.org", firstName: "Demo", lastName: "User" });
+
+      await storage.createImpactEntry({
+        programId: foodBankId, userId: seedUserId, date: "2025-01-15",
+        geographyLevel: "County", geographyValue: "Los Angeles County",
+        zipCode: "90012", demographics: "Low-income families", outcomes: "Meals distributed",
+        metricValues: { "Meals Served": 2500, "Families Assisted": 400 },
+      });
+      await storage.createImpactEntry({
+        programId: foodBankId, userId: seedUserId, date: "2025-02-01",
+        geographyLevel: "SPA", geographyValue: "SPA 6",
+        zipCode: "90003", demographics: "Underserved communities", outcomes: "Food access improved",
+        metricValues: { "Meals Served": 1800, "Families Assisted": 280 },
+      });
+      await storage.createImpactEntry({
+        programId: foodBankId, userId: seedUserId, date: "2025-01-20",
+        geographyLevel: "City", geographyValue: "Los Angeles",
+        zipCode: "90015", demographics: "Urban residents", outcomes: "Nutritional support",
+        metricValues: { "Meals Served": 3200, "Families Assisted": 520 },
+      });
+      await storage.createImpactEntry({
+        programId: foodBankId, userId: seedUserId, date: "2025-01-25",
+        geographyLevel: "State", geographyValue: "California",
+        zipCode: "90001", demographics: "Statewide", outcomes: "Food security initiative",
+        metricValues: { "Meals Served": 8500, "Families Assisted": 1200 },
+      });
+    }
+
+    if (youthId) {
+      const seedUserId = "seed-demo-user";
+      await storage.createImpactEntry({
+        programId: youthId, userId: seedUserId, date: "2025-01-10",
+        geographyLevel: "SPA", geographyValue: "SPA 8",
+        zipCode: "90802", demographics: "Youth 14-21", outcomes: "Career guidance sessions",
+        metricValues: { "Youth Enrolled": 45, "Mentor Hours": 180, "Graduations": 12 },
+      });
+    }
+
+    console.log("Database seeded with initial data and sample impact entries.");
   }
 }

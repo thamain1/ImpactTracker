@@ -78,6 +78,13 @@ client/src/
 - `npm run db:push` syncs database schema
 
 ## Recent Changes (Feb 2026)
+- **Census Bureau API Integration**: Real-time comparison of impact data against U.S. Census ACS population data
+  - Supports State, County, City lookups via Census API
+  - SPA (Service Planning Area) uses pre-computed LA County estimates
+  - Census cache table for performance (30-day TTL)
+  - Dashboard shows Census Comparison section with population reach %, poverty rate, median income
+  - Program Details shows per-geography census comparison with progress bars
+  - API endpoints: GET /api/census, POST /api/census/batch, GET /api/census/comparison
 - Expanded schema with program type, status, dates, target population, goals, locations
 - Added organization profile fields (address, phone, website, email)
 - Impact entries now support ZIP codes, demographics, outcomes

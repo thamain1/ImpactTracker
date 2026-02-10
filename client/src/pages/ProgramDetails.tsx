@@ -1,10 +1,12 @@
 import { useRoute } from "wouter";
 import { useProgram } from "@/hooks/use-programs";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
+import { useCensusBatch, type CensusComparison } from "@/hooks/use-census";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { useMemo } from "react";
 import {
   BarChart,
   Bar,
@@ -13,10 +15,11 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell
+  Cell,
+  Legend
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download } from "lucide-react";
+import { ArrowLeft, MapPin, Download, TrendingUp, DollarSign, AlertTriangle, Info } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { api } from "@shared/routes";
@@ -30,6 +33,15 @@ export default function ProgramDetails() {
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: entries, isLoading: entriesLoading } = useImpactEntries(programId);
+
+  const geoList = useMemo(() => {
+    if (!stats) return [];
+    const unique = new Map<string, { level: string; value: string }>();
+    stats.forEach(s => unique.set(`${s.geographyLevel}:${s.geographyValue}`, { level: s.geographyLevel, value: s.geographyValue }));
+    return Array.from(unique.values());
+  }, [stats]);
+
+  const { data: censusData } = useCensusBatch(geoList);
 
   if (progLoading || statsLoading) {
     return (
@@ -249,6 +261,100 @@ export default function ProgramDetails() {
           </Card>
         </div>
       </div>
+
+      {/* Census Comparison Section */}
+      {censusData && censusData.length > 0 && (
+        <div>
+          <h2 className="text-xl font-heading font-bold text-slate-900 mb-2 flex items-center gap-2">
+            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            How this program's impact compares to census population data ({censusData[0]?.dataYear} ACS)
+          </p>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {censusData.map((census, i) => {
+              const matchingStat = stats?.find(
+                s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
+              );
+              const impactTotal = matchingStat
+                ? Object.values(matchingStat.metrics).reduce((sum, v) => sum + v, 0)
+                : 0;
+              const reachPercent = census.totalPopulation && impactTotal > 0
+                ? Math.round((impactTotal / census.totalPopulation) * 10000) / 100
+                : null;
+
+              return (
+                <Card key={`census-${i}`} data-testid={`census-program-card-${i}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <Badge variant="outline" className="text-xs">{census.geographyLevel}</Badge>
+                      <span className="font-semibold text-sm text-slate-800">{census.geographyValue}</span>
+                      {census.isApproximate && (
+                        <span title={census.approximateNote}>
+                          <Info className="w-3.5 h-3.5 text-amber-500" />
+                        </span>
+                      )}
+                    </div>
+
+                    {census.totalPopulation ? (
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                            <span className="text-muted-foreground">Census Population</span>
+                            <span className="font-bold text-slate-900">{census.totalPopulation.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                            <span className="text-muted-foreground">Program Impact</span>
+                            <span className="font-bold text-primary">{impactTotal.toLocaleString()}</span>
+                          </div>
+                          {reachPercent !== null && (
+                            <div className="mt-2">
+                              <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                                <span className="text-muted-foreground">Population Reached</span>
+                                <span className="font-bold text-emerald-600">{reachPercent}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2">
+                                <div
+                                  className="bg-primary rounded-full h-2 transition-all"
+                                  style={{ width: `${Math.min(reachPercent, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
+                          {census.povertyRate !== null && (
+                            <div className="text-xs">
+                              <span className="text-muted-foreground">Poverty Rate</span>
+                              <div className="font-bold text-slate-700 flex items-center gap-1">
+                                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                                {census.povertyRate}%
+                              </div>
+                            </div>
+                          )}
+                          {census.medianIncome !== null && (
+                            <div className="text-xs">
+                              <span className="text-muted-foreground">Median Income</span>
+                              <div className="font-bold text-slate-700 flex items-center gap-1">
+                                <DollarSign className="w-3 h-3 text-emerald-500" />
+                                ${census.medianIncome.toLocaleString()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic">Census data not available for this area</p>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

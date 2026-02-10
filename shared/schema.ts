@@ -64,6 +64,19 @@ export const impactEntries = pgTable("impact_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const censusCache = pgTable("census_cache", {
+  id: serial("id").primaryKey(),
+  geographyLevel: text("geography_level").notNull(),
+  geographyValue: text("geography_value").notNull(),
+  stateCode: text("state_code"),
+  totalPopulation: integer("total_population"),
+  povertyCount: integer("poverty_count"),
+  povertyUniverse: integer("poverty_universe"),
+  medianIncome: integer("median_income"),
+  dataYear: integer("data_year").notNull(),
+  fetchedAt: timestamp("fetched_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
@@ -123,6 +136,7 @@ export type InsertProgram = z.infer<typeof insertProgramSchema>;
 export type UpdateProgram = z.infer<typeof updateProgramSchema>;
 export type InsertImpactMetric = z.infer<typeof insertImpactMetricSchema>;
 export type InsertImpactEntry = z.infer<typeof insertImpactEntrySchema>;
+export type CensusCache = typeof censusCache.$inferSelect;
 
 export interface ProgramWithMetrics extends Program {
   metrics: ImpactMetric[];
