@@ -114,8 +114,8 @@ export const insertOrganizationSchema = createInsertSchema(organizations).omit({
 export const updateOrganizationSchema = insertOrganizationSchema.partial();
 export const insertUserRoleSchema = createInsertSchema(userRoles).omit({ id: true, createdAt: true });
 export const insertProgramSchema = createInsertSchema(programs, {
-  startDate: z.string().optional().nullable().transform(v => v || null),
-  endDate: z.string().optional().nullable().transform(v => v || null),
+  startDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
+  endDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
 }).omit({ id: true, createdAt: true });
 export const updateProgramSchema = insertProgramSchema.partial();
 export const insertImpactMetricSchema = createInsertSchema(impactMetrics).omit({ id: true, createdAt: true });
