@@ -1,0 +1,79 @@
+Problem statement 
+•	Nonprofits need help measuring and reporting the impact of their programs.
+•	Many struggle to turn program activity data into clear impact numbers across Local SPA, City Wide, County Wide, and Statewide levels.
+•	There is no simple, guided tool that takes easy inputs and automatically calculates or estimates impact by these geographic levels.
+•	The goal is a web app that lets nonprofits enter straightforward program data and immediately see impact results at each level, with a clean dashboard and downloadable reports.
+ 
+User roles 
+•	Nonprofit Staff:
+o	Fills out program details and impact inputs.
+o	Views and downloads program level impact reports (by geography).
+•	Admin (Organizational Admin):
+o	Manages organizations, users, and permissions.
+o	Can view aggregated impact across multiple programs and geographic areas.
+•	Guest Viewer (optional later):
+o	Can view public dashboards and summary impact stats without logging in.
+ 
+Main screens / pages
+•	Landing / Public Dashboard:
+o	Explains the tool, sample impact reports, and invites signup.
+•	Login / Signup:
+o	Login page for nonprofit staff and admins.
+o	Simple signup for nonprofit organizations.
+•	Dashboard (Home):
+o	Shows list of the user’s programs and key summary stats.
+o	Shows quick view tiles: total programs, total participants, impact by geography level (Local SPA/City/County/State).
+•	Program list / Library:
+o	Table of all programs (with filters by org, status, date).
+o	Links to edit, view impact, or delete each program.
+•	Program creation / edit wizard:
+o	Multi step form to define a program: name, organization, type, dates, locations, target population, and goals.
+o	Clear labels and optional help text for each field.
+•	Impact input form (per program):
+o	Wizard where the user enters: number of participants served, locations (ZIP code, city), service dates, and any demographics or outcomes.
+o	Auto suggests impact estimates if some data is missing, with explanations.
+•	Impact view / report page (per program):
+o	Single page that shows:
+	Raw input data.
+	Calculated impact totals by geography level (Local SPA, City, County, State).
+	Charts and table summaries.
+o	Download buttons for PDF or CSV reports.
+•	Admin dashboard (separate view):
+o	List of all organizations and their programs.
+o	High level roll up impact metrics (e.g., total participants statewide, county wide totals).
+•	Settings / org profile:
+o	Organization profile (name, address, contact info, structure).
+o	Option to assign users to organizations and roles.
+ 
+Core user flows (paste as bullet list)
+•	Onboarding nonprofit staff:
+o	View the landing page → click “Sign up” → choose “I represent a nonprofit” → enter org details → confirm email → land on the Dashboard.
+•	Create a new program:
+o	From Dashboard → “Add program” → step by step wizard to define program basics → save program → land on the program’s Impact input form.
+•	Enter impact inputs:
+o	Open a program → choose “Enter impact data” → fill out the form (participants, locations, dates, demographics, outcomes) → save → immediately see the impact view and report.
+•	View and share impact by geography:
+o	From the Impact view page → toggle between Local SPA, City, County, and State views → see totals, percentages, and maps (if added later).
+o	Click “Download report” → choose format (PDF or CSV) → download and share.
+•	Admin manage organizations and data:
+o	Log in as admin → go to Admin dashboard → manage organizations, users, and permissions → review aggregated impact stats across all programs.
+•	Revise and re calculate:
+o	Edit an existing program or impact input → update fields → save → see updated impact totals and report without re enter all data.
+ 
+Data entities
+•	Organization:
+o	ID, name, address, city, ZIP, county, state, contact person, phone, email, nonprofit status, notes.
+•	User:
+o	ID, name, email, password hash, role (staff, admin), orgID (many to one).
+•	Program:
+o	ID, orgID, name, program type, description, start date, end date, goal/mission statement, active status, created at, updated at.
+•	Program Location:
+o	ID, programID, ZIP code, city, county, state, street address (optional), notes.
+•	Impact Input / Service Event:
+o	ID, programID, date of service, service type, number of participants served, number of unique participants (if known), demographic categories (e.g., income level, age group), outcome flags (e.g., “food provided”, “education completed”), notes.
+•	Geography Level:
+o	ID, name (e.g., “Local SPA”, “City Wide”, “County Wide”, “Statewide”), rules or multipliers used for scaling or aggregation (for later logic).
+•	Impact Metric / Impact Rollup:
+o	ID, programID, geographyLevelID, locationKey (ZIP, city, county, or state), totalParticipants, estimatedParticipants, outcomesAchieved, rawInputsCount, calculatedAt, note (e.g., “calculated from ZIP coverage”).
+•	Report / ExportLog (optional but useful):
+o	ID, userID, programID, geographyLevelID, format (PDF/CSV), requestedAt, downloadUrl.
