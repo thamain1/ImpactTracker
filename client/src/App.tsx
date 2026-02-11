@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import Programs from "@/pages/Programs";
 import ProgramDetails from "@/pages/ProgramDetails";
 import ProgramWizard from "@/pages/ProgramWizard";
+import ProgramEdit from "@/pages/ProgramEdit";
 import Reports from "@/pages/Reports";
 import AdminDashboard from "@/pages/AdminDashboard";
 import Settings from "@/pages/Settings";
@@ -71,6 +72,10 @@ function Router() {
 
       <Route path="/programs/new">
         <ProtectedRoute component={ProgramWizard} />
+      </Route>
+
+      <Route path="/programs/:id/edit">
+        <ProtectedRoute component={ProgramEdit} />
       </Route>
 
       <Route path="/programs/:id">

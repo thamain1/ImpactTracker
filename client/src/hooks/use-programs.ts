@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { useToast } from "@/hooks/use-toast";
-import type { InsertProgram, ProgramResponse } from "@shared/schema";
+import type { UpdateProgram } from "@shared/schema";
 import { z } from "zod";
 
 export function usePrograms(orgId?: number) {
@@ -57,6 +57,45 @@ export function useCreateProgram() {
       toast({
         title: "Success",
         description: "Program created successfully",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useUpdateProgram(id: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: UpdateProgram) => {
+      const url = buildUrl(api.programs.update.path, { id });
+      const res = await fetch(url, {
+        method: api.programs.update.method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update program");
+      }
+
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.programs.get.path, id] });
+      toast({
+        title: "Success",
+        description: "Program updated successfully",
       });
     },
     onError: (error: Error) => {

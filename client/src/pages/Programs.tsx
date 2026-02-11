@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Plus, FolderOpen, Trash2, Search, LayoutGrid, List } from "lucide-react";
+import { ArrowRight, Plus, FolderOpen, Trash2, Search, LayoutGrid, List, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -198,6 +198,11 @@ export default function Programs() {
                         <ArrowRight className="w-4 h-4" />
                       </Button>
                     </Link>
+                    <Link href={`/programs/${program.id}/edit`}>
+                      <Button variant="ghost" size="icon" className="text-muted-foreground shrink-0" data-testid={`button-edit-program-${program.id}`}>
+                        <Pencil className="w-4 h-4" />
+                      </Button>
+                    </Link>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="text-muted-foreground shrink-0" data-testid={`button-delete-program-${program.id}`}>
@@ -265,6 +270,11 @@ export default function Programs() {
                           <div className="flex items-center justify-end gap-2">
                             <Link href={`/programs/${program.id}`}>
                               <Button variant="ghost" size="sm" data-testid={`link-view-program-${program.id}`}>View</Button>
+                            </Link>
+                            <Link href={`/programs/${program.id}/edit`}>
+                              <Button variant="ghost" size="icon" className="text-muted-foreground" data-testid={`button-edit-tbl-${program.id}`}>
+                                <Pencil className="w-4 h-4" />
+                              </Button>
                             </Link>
                             <AlertDialog>
                               <AlertDialogTrigger asChild>

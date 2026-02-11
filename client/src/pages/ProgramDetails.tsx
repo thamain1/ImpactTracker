@@ -19,7 +19,7 @@ import {
   Legend
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, TrendingUp, DollarSign, AlertTriangle, Info } from "lucide-react";
+import { ArrowLeft, MapPin, Download, TrendingUp, DollarSign, AlertTriangle, Info, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { api } from "@shared/routes";
@@ -99,7 +99,13 @@ export default function ProgramDetails() {
             <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">{program.name}</h1>
             <p className="text-lg text-slate-600 max-w-3xl">{program.description}</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            <Link href={`/programs/${programId}/edit`}>
+              <Button variant="outline" data-testid="button-edit-program">
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit Program
+              </Button>
+            </Link>
             <Button
               variant="outline"
               onClick={() => window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank")}
