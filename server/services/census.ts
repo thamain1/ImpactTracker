@@ -159,11 +159,21 @@ async function fetchCountyCensus(countyName: string): Promise<CensusComparison |
   if (!data || data.length < 2) return null;
 
   const normalized = countyName.toLowerCase().replace(/\s*county\s*/i, "").trim();
-  const matchRow = data.find((row, i) => {
-    if (i === 0) return false;
-    const name = (row[0] || "").toLowerCase();
-    return name.includes(normalized);
-  });
+  const exactPattern = `${normalized} county,`;
+  let matchRow: string[] | undefined = undefined;
+  let fallback: string[] | undefined = undefined;
+
+  for (let i = 1; i < data.length; i++) {
+    const name = (data[i][0] || "").toLowerCase();
+    if (name.startsWith(exactPattern)) {
+      matchRow = data[i];
+      break;
+    }
+    if (!fallback && name.includes(normalized)) {
+      fallback = data[i];
+    }
+  }
+  if (!matchRow) matchRow = fallback;
 
   if (!matchRow) return null;
 
@@ -223,11 +233,33 @@ async function fetchCityCensus(cityName: string): Promise<CensusComparison | nul
     if (!data || data.length < 2) continue;
 
     const normalized = cityName.toLowerCase().trim();
-    const found = data.find((row, i) => {
-      if (i === 0) return false;
-      const name = (row[0] || "").toLowerCase();
-      return name.includes(normalized);
-    });
+    const exactPattern = `${normalized} city,`;
+    const cdpPattern = `${normalized} cdp,`;
+    const townPattern = `${normalized} town,`;
+    let bestMatch: string[] | null = null;
+    let bestScore = 0;
+
+    for (let i = 1; i < data.length; i++) {
+      const name = (data[i][0] || "").toLowerCase();
+      if (name.startsWith(exactPattern)) {
+        bestMatch = data[i];
+        bestScore = 100;
+        break;
+      }
+      if (name.startsWith(cdpPattern) && bestScore < 80) {
+        bestMatch = data[i];
+        bestScore = 80;
+      }
+      if (name.startsWith(townPattern) && bestScore < 70) {
+        bestMatch = data[i];
+        bestScore = 70;
+      }
+      if (name.includes(normalized) && bestScore < 10) {
+        bestMatch = data[i];
+        bestScore = 10;
+      }
+    }
+    const found = bestMatch;
 
     if (found) {
       matchRow = found;
