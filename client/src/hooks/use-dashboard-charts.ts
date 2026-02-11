@@ -12,5 +12,6 @@ export function useDashboardCharts(orgId?: number) {
       if (!res.ok) throw new Error("Failed to fetch dashboard charts");
       return res.json();
     },
+    enabled: !!orgId,
   });
 }

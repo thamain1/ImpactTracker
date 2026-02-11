@@ -332,16 +332,7 @@ export async function registerRoutes(
   app.get(api.dashboard.charts.path, isAuthenticated, async (req, res) => {
     try {
       const currentYear = new Date().getFullYear();
-      const userId = (req.user as any).claims.sub;
-      let orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
-
-      if (orgId) {
-        const roles = await storage.getUserRoles(orgId);
-        const hasAccess = roles.some(r => r.userId === userId);
-        if (!hasAccess) {
-          return res.status(403).json({ message: "Access denied" });
-        }
-      }
+      const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
 
       const orgPrograms = await storage.getPrograms(orgId);
       const orgProgramIds = new Set(orgPrograms.map(p => p.id));
