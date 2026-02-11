@@ -209,7 +209,7 @@ export class DatabaseStorage implements IStorage {
 
   async getDistinctGeographies(): Promise<{ level: string; value: string }[]> {
     const results = await db.execute(
-      sql`SELECT DISTINCT geography_level as level, geography_value as value FROM impact_entries`
+      sql`SELECT DISTINCT geography_level as level, geography_value as value FROM impact_entries WHERE geography_value IS NOT NULL AND geography_value != ''`
     );
     return (results.rows || []) as { level: string; value: string }[];
   }
