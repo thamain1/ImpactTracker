@@ -50,6 +50,37 @@ export default function ProgramDetails() {
     program?.targetAgeMax,
   );
 
+  const primaryMetric = program?.metrics[0]?.name;
+
+  const GEO_LEVELS = ["SPA", "City", "County", "State"] as const;
+  const GEO_LEVEL_COLORS: Record<string, string> = {
+    SPA: "#8b5cf6",
+    City: "#3b82f6",
+    County: "#0d9488",
+    State: "#f97316",
+  };
+
+  const statsByLevel = useMemo(() => {
+    if (!stats || !primaryMetric) return {};
+    const grouped: Record<string, { name: string; value: number }[]> = {};
+    stats.forEach(stat => {
+      const level = stat.geographyLevel;
+      if (!grouped[level]) grouped[level] = [];
+      const existing = grouped[level].find(item => item.name === stat.geographyValue);
+      if (existing) {
+        existing.value += (stat.metrics[primaryMetric] || 0);
+      } else {
+        grouped[level].push({
+          name: stat.geographyValue,
+          value: stat.metrics[primaryMetric] || 0,
+        });
+      }
+    });
+    return grouped;
+  }, [stats, primaryMetric]);
+
+  const activeLevels = GEO_LEVELS.filter(level => statsByLevel[level]?.length);
+
   if (progLoading || statsLoading) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -76,37 +107,6 @@ export default function ProgramDetails() {
       }
     });
   });
-
-  const primaryMetric = program.metrics[0]?.name;
-
-  const GEO_LEVELS = ["SPA", "City", "County", "State"] as const;
-  const GEO_LEVEL_COLORS: Record<string, string> = {
-    SPA: "#8b5cf6",
-    City: "#3b82f6",
-    County: "#0d9488",
-    State: "#f97316",
-  };
-
-  const statsByLevel = useMemo(() => {
-    if (!stats) return {};
-    const grouped: Record<string, { name: string; value: number }[]> = {};
-    stats.forEach(stat => {
-      const level = stat.geographyLevel;
-      if (!grouped[level]) grouped[level] = [];
-      const existing = grouped[level].find(item => item.name === stat.geographyValue);
-      if (existing) {
-        existing.value += (stat.metrics[primaryMetric] || 0);
-      } else {
-        grouped[level].push({
-          name: stat.geographyValue,
-          value: stat.metrics[primaryMetric] || 0,
-        });
-      }
-    });
-    return grouped;
-  }, [stats, primaryMetric]);
-
-  const activeLevels = GEO_LEVELS.filter(level => statsByLevel[level]?.length);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
