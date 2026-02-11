@@ -85,6 +85,12 @@ client/src/
   - Dashboard shows Census Comparison section with population reach %, poverty rate, median income
   - Program Details shows per-geography census comparison with progress bars
   - API endpoints: GET /api/census, POST /api/census/batch, GET /api/census/comparison
+- **Geographic Hierarchy Rollup**: Impact data automatically rolls up to parent geographies
+  - City → County → State (e.g., Los Angeles → Los Angeles County → California)
+  - City → SPA for LA County cities
+  - server/services/geography.ts contains city-to-county, county-to-state, city-to-SPA mappings
+  - Impact stats and census comparison endpoints include rolled-up parent geography data
+  - Program Details shows census comparison across all containing geographic levels
 - Expanded schema with program type, status, dates, target population, goals, locations
 - Added organization profile fields (address, phone, website, email)
 - Impact entries now support ZIP codes, demographics, outcomes

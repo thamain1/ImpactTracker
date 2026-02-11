@@ -5,6 +5,7 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from "./services/census";
+import { expandGeographies, getParentGeographies } from "./services/geography";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -181,14 +182,26 @@ export async function registerRoutes(
     const entries = await storage.getImpactEntries(programId);
     
     const aggregation: Record<string, Record<string, Record<string, number>>> = {};
+    
+    function addToAggregation(level: string, value: string, metrics: Record<string, number>) {
+      if (!value) return;
+      if (!aggregation[level]) aggregation[level] = {};
+      if (!aggregation[level][value]) aggregation[level][value] = {};
+      Object.entries(metrics).forEach(([metricName, metricVal]) => {
+        aggregation[level][value][metricName] = (aggregation[level][value][metricName] || 0) + Number(metricVal);
+      });
+    }
+
     entries.forEach(entry => {
       const level = entry.geographyLevel;
       const value = entry.geographyValue;
-      if (!aggregation[level]) aggregation[level] = {};
-      if (!aggregation[level][value]) aggregation[level][value] = {};
       const metrics = entry.metricValues as Record<string, number>;
-      Object.entries(metrics).forEach(([metricName, metricVal]) => {
-        aggregation[level][value][metricName] = (aggregation[level][value][metricName] || 0) + Number(metricVal);
+      
+      addToAggregation(level, value, metrics);
+      
+      const parents = getParentGeographies(level, value);
+      parents.forEach(parent => {
+        addToAggregation(parent.level, parent.value, metrics);
       });
     });
 
@@ -237,15 +250,24 @@ export async function registerRoutes(
   // === Census ===
   app.get(api.census.comparison.path, isAuthenticated, async (req, res) => {
     try {
-      const geographies = await storage.getDistinctGeographies();
+      const rawGeographies = await storage.getDistinctGeographies();
       const allEntries = await storage.getAllImpactEntries();
+
+      const { expanded: geographies } = expandGeographies(rawGeographies);
 
       const impactCounts: Record<string, number> = {};
       allEntries.forEach(entry => {
+        if (!entry.geographyValue) return;
         const key = `${entry.geographyLevel}:${entry.geographyValue}`;
         const mv = entry.metricValues as Record<string, number>;
         const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
         impactCounts[key] = (impactCounts[key] || 0) + total;
+
+        const parents = getParentGeographies(entry.geographyLevel, entry.geographyValue);
+        parents.forEach(parent => {
+          const parentKey = `${parent.level}:${parent.value}`;
+          impactCounts[parentKey] = (impactCounts[parentKey] || 0) + total;
+        });
       });
 
       const censusResults = await getCensusForGeographies(geographies);

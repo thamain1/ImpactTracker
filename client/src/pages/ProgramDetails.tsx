@@ -96,14 +96,15 @@ export default function ProgramDetails() {
 
   if (!program) return <div>Program not found</div>;
 
-  // Aggregate totals for the top cards
+  // Aggregate totals for the top cards from raw entries (avoids double-counting rolled-up parent geos)
   const totalMetrics: Record<string, number> = {};
   program.metrics.forEach(m => totalMetrics[m.name] = 0);
 
-  stats?.forEach(stat => {
-    Object.entries(stat.metrics).forEach(([key, val]) => {
+  entries?.forEach(entry => {
+    const mv = entry.metricValues as Record<string, number>;
+    Object.entries(mv).forEach(([key, val]) => {
       if (totalMetrics[key] !== undefined) {
-        totalMetrics[key] += val;
+        totalMetrics[key] += Number(val);
       }
     });
   });
@@ -307,11 +308,16 @@ export default function ProgramDetails() {
             <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
           </h2>
           <p className="text-sm text-muted-foreground mb-4">
-            How this program's impact compares to census population data ({censusData[0]?.dataYear} ACS)
+            How this program's impact compares to census population data ({censusData[0]?.dataYear} ACS) across all geographic levels
           </p>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {censusData.map((census, i) => {
+            {[...censusData]
+              .sort((a, b) => {
+                const order = ["SPA", "City", "County", "State"];
+                return order.indexOf(a.geographyLevel) - order.indexOf(b.geographyLevel);
+              })
+              .map((census, i) => {
               const matchingStat = stats?.find(
                 s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
               );
