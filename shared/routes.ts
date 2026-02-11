@@ -311,6 +311,38 @@ export const api = {
       },
     },
   },
+  dashboard: {
+    charts: {
+      method: 'GET' as const,
+      path: '/api/dashboard/charts' as const,
+      responses: {
+        200: z.object({
+          participantsByMonth: z.array(z.object({
+            month: z.string(),
+            count: z.number(),
+          })),
+          participantsByProgram: z.array(z.object({
+            programId: z.number(),
+            programName: z.string(),
+            count: z.number(),
+          })),
+          resourcesByProgram: z.array(z.object({
+            programId: z.number(),
+            programName: z.string(),
+            metrics: z.record(z.string(), z.number()),
+          })),
+          goalVsActual: z.array(z.object({
+            programId: z.number(),
+            programName: z.string(),
+            targetPopulation: z.string().nullable(),
+            goals: z.string().nullable(),
+            goalTarget: z.number().nullable(),
+            actual: z.number(),
+          })),
+        }),
+      },
+    },
+  },
   admin: {
     stats: {
       method: 'GET' as const,

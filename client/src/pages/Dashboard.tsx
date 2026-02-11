@@ -4,20 +4,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "wouter";
-import { Plus, Users, ArrowRight, Building2, BarChart3, MapPin, Globe2, FileBarChart, TrendingUp, DollarSign, AlertTriangle, Info } from "lucide-react";
+import { Plus, Users, ArrowRight, Building2, BarChart3, MapPin, Globe2, FileBarChart, Target } from "lucide-react";
 import { usePrograms } from "@/hooks/use-programs";
 import { useAdminStats } from "@/hooks/use-admin";
-import { useCensusComparison } from "@/hooks/use-census";
+import { useDashboardCharts } from "@/hooks/use-dashboard-charts";
 import { CreateOrgDialog } from "@/components/CreateOrgDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, Legend } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
   active: "bg-emerald-100 text-emerald-800",
   completed: "bg-blue-100 text-blue-800",
   draft: "bg-slate-100 text-slate-600",
 };
+
+const CHART_COLORS = ["#0d9488", "#6366f1", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316"];
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -26,7 +28,7 @@ export default function Dashboard() {
   const firstOrgId = orgs?.[0]?.id;
   const { data: programs, isLoading: progsLoading } = usePrograms(firstOrgId);
   const { data: adminStats } = useAdminStats();
-  const { data: censusData, isLoading: censusLoading } = useCensusComparison();
+  const { data: chartData, isLoading: chartsLoading } = useDashboardCharts(firstOrgId);
 
   const isLoading = orgsLoading || progsLoading;
 
@@ -66,6 +68,29 @@ export default function Dashboard() {
   const activeCount = programs?.filter(p => p.status === "active").length || 0;
   const totalEntries = adminStats?.totalEntries || 0;
   const totalMetrics = programs?.reduce((sum, p) => sum + p.metrics.length, 0) || 0;
+
+  const currentYear = new Date().getFullYear();
+
+  const allResourceMetrics: { name: string; total: number; programName: string }[] = [];
+  if (chartData?.resourcesByProgram) {
+    chartData.resourcesByProgram.forEach((prog: any) => {
+      Object.entries(prog.metrics).forEach(([metricName, val]) => {
+        allResourceMetrics.push({
+          name: metricName,
+          total: val as number,
+          programName: prog.programName,
+        });
+      });
+    });
+  }
+
+  const resourceAggregated: Record<string, number> = {};
+  allResourceMetrics.forEach(r => {
+    resourceAggregated[r.name] = (resourceAggregated[r.name] || 0) + r.total;
+  });
+  const resourceChartData = Object.entries(resourceAggregated)
+    .map(([name, total]) => ({ name, total }))
+    .sort((a, b) => b.total - a.total);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
@@ -173,129 +198,228 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Census Comparison */}
-      {censusData && censusData.length > 0 && (
-        <div>
-          <h2 className="text-lg font-heading font-bold text-slate-900 mb-2 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Your impact data compared against U.S. Census population estimates ({censusData[0]?.dataYear} ACS)
-          </p>
+      {/* Dashboard Charts */}
+      {chartsLoading && (
+        <div className="grid lg:grid-cols-2 gap-6">
+          <Skeleton className="h-[350px] rounded-xl" />
+          <Skeleton className="h-[350px] rounded-xl" />
+          <Skeleton className="h-[350px] rounded-xl" />
+          <Skeleton className="h-[350px] rounded-xl" />
+        </div>
+      )}
 
-          <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base font-heading">Population Reach by Area</CardTitle>
-                </CardHeader>
-                <CardContent className="h-[300px]">
+      {chartData && (
+        <div className="space-y-6">
+          <h2 className="text-lg font-heading font-bold text-slate-900 flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" /> Performance Analytics ({currentYear})
+          </h2>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Participants by Month */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-heading" data-testid="text-chart-monthly">Participants by Month</CardTitle>
+                <p className="text-xs text-muted-foreground">Total participant count per month for {currentYear}</p>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData.participantsByMonth}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      cursor={{ fill: '#f1f5f9' }}
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                      formatter={(value: number) => [value.toLocaleString(), "Participants"]}
+                    />
+                    <Bar dataKey="count" name="Participants" radius={[4, 4, 0, 0]}>
+                      {chartData.participantsByMonth.map((_: any, i: number) => (
+                        <Cell key={`month-${i}`} fill={chartData.participantsByMonth[i].count > 0 ? "#0d9488" : "#e2e8f0"} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Participants by Program */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-heading" data-testid="text-chart-by-program">Participants by Program</CardTitle>
+                <p className="text-xs text-muted-foreground">Year-to-date participant totals per program</p>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                {chartData.participantsByProgram.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
-                      data={censusData.filter(d => d.totalPopulation).map(d => ({
-                        name: d.geographyValue.length > 15 ? d.geographyValue.slice(0, 14) + "..." : d.geographyValue,
-                        fullName: d.geographyValue,
-                        impact: d.impactCount,
-                        population: d.totalPopulation,
-                        reach: d.reachPercent,
-                        level: d.geographyLevel,
+                      data={chartData.participantsByProgram.map((p: any) => ({
+                        ...p,
+                        shortName: p.programName.length > 20 ? p.programName.slice(0, 18) + "..." : p.programName,
                       }))}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <XAxis dataKey="shortName" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                       <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
                       <Tooltip
                         cursor={{ fill: '#f1f5f9' }}
                         contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        formatter={(value: number, name: string) => {
-                          if (name === "impact") return [value.toLocaleString(), "Your Impact"];
-                          return [value.toLocaleString(), "Census Population"];
-                        }}
-                        labelFormatter={(label: string, payload: any) => payload?.[0]?.payload?.fullName || label}
+                        formatter={(value: number) => [value.toLocaleString(), "Participants"]}
+                        labelFormatter={(_: string, payload: any) => payload?.[0]?.payload?.programName || _}
                       />
-                      <Bar dataKey="impact" name="impact" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="count" name="Participants" radius={[4, 4, 0, 0]}>
+                        {chartData.participantsByProgram.map((_: any, i: number) => (
+                          <Cell key={`prog-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
+                      </Bar>
                     </BarChart>
                   </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                    No participant data for {currentYear} yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-            <div className="space-y-4">
-              {censusData.map((item, i) => (
-                <Card key={`${item.geographyLevel}-${item.geographyValue}`} data-testid={`census-card-${i}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <Badge variant="outline" className="text-xs">{item.geographyLevel}</Badge>
-                      <span className="font-medium text-sm text-slate-800">{item.geographyValue}</span>
-                      {item.isApproximate && (
-                        <span title={item.approximateNote}>
-                          <Info className="w-3.5 h-3.5 text-amber-500" />
-                        </span>
-                      )}
-                    </div>
+            {/* Resources Provided */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-heading" data-testid="text-chart-resources">Resources Provided</CardTitle>
+                <p className="text-xs text-muted-foreground">Aggregate resources across all programs YTD</p>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                {resourceChartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={resourceChartData}
+                      layout="vertical"
+                      margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e8f0" />
+                      <XAxis type="number" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v: number) => v.toLocaleString()} />
+                      <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} width={120} />
+                      <Tooltip
+                        cursor={{ fill: '#f1f5f9' }}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        formatter={(value: number) => [value.toLocaleString(), "Total"]}
+                      />
+                      <Bar dataKey="total" name="Total" radius={[0, 4, 4, 0]}>
+                        {resourceChartData.map((_, i) => (
+                          <Cell key={`res-${i}`} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                    No resource data for {currentYear} yet
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-                    {item.totalPopulation && (
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="text-muted-foreground">Census Population</span>
-                          <span className="font-bold text-slate-900">{item.totalPopulation.toLocaleString()}</span>
+            {/* Goal vs. Actual */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-heading" data-testid="text-chart-goal-actual">Goal vs. Actual</CardTitle>
+                <p className="text-xs text-muted-foreground">Target goals compared to actual participants per program</p>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                {chartData.goalVsActual && chartData.goalVsActual.length > 0 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={chartData.goalVsActual.map((p: any) => ({
+                        ...p,
+                        shortName: p.programName.length > 20 ? p.programName.slice(0, 18) + "..." : p.programName,
+                        goal: p.goalTarget || 0,
+                      }))}
+                      margin={{ top: 10, right: 10, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="shortName" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f1f5f9' }}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        labelFormatter={(_: string, payload: any) => {
+                          const item = payload?.[0]?.payload;
+                          if (!item) return _;
+                          let label = item.programName;
+                          if (item.targetPopulation) label += `\nTarget: ${item.targetPopulation}`;
+                          return label;
+                        }}
+                        formatter={(value: number, name: string) => [
+                          value.toLocaleString(),
+                          name === "goal" ? "Goal" : "Actual"
+                        ]}
+                      />
+                      <Legend />
+                      <Bar dataKey="goal" name="Goal" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="actual" name="Actual" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                    No program data available
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Goal Details Table */}
+          {chartData.goalVsActual && chartData.goalVsActual.some((p: any) => p.targetPopulation || p.goals) && (
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base font-heading flex items-center gap-2">
+                  <Target className="w-4 h-4 text-primary" /> Program Targets & Populations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {chartData.goalVsActual.map((prog: any) => (
+                    <div key={prog.programId} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-md bg-muted/50" data-testid={`goal-detail-${prog.programId}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-slate-800 truncate">{prog.programName}</p>
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          {prog.targetPopulation && (
+                            <Badge variant="outline" className="text-xs">
+                              {prog.targetPopulation}
+                            </Badge>
+                          )}
+                          {prog.goals && (
+                            <span className="text-xs text-muted-foreground truncate max-w-xs">{prog.goals}</span>
+                          )}
                         </div>
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="text-muted-foreground">Your Impact</span>
-                          <span className="font-bold text-primary">{item.impactCount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center gap-4 shrink-0">
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Goal</p>
+                          <p className="font-bold text-sm text-slate-700">{prog.goalTarget ? prog.goalTarget.toLocaleString() : "N/A"}</p>
                         </div>
-                        {item.reachPercent !== null && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="text-muted-foreground">Population Reached</span>
-                            <span className="font-bold text-emerald-600">{item.reachPercent}%</span>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Actual</p>
+                          <p className="font-bold text-sm text-primary">{prog.actual.toLocaleString()}</p>
+                        </div>
+                        {prog.goalTarget && prog.goalTarget > 0 && (
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">Progress</p>
+                            <p className={`font-bold text-sm ${prog.actual >= prog.goalTarget ? "text-emerald-600" : "text-amber-600"}`}>
+                              {Math.round((prog.actual / prog.goalTarget) * 100)}%
+                            </p>
                           </div>
                         )}
                       </div>
-                    )}
-
-                    <div className="mt-3 pt-3 border-t flex items-center justify-between gap-2 flex-wrap">
-                      {item.povertyRate !== null && (
-                        <div className="text-xs">
-                          <span className="text-muted-foreground">Poverty Rate</span>
-                          <div className="font-bold text-slate-700 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3 text-amber-500" />
-                            {item.povertyRate}%
-                          </div>
-                        </div>
-                      )}
-                      {item.medianIncome !== null && (
-                        <div className="text-xs">
-                          <span className="text-muted-foreground">Median Income</span>
-                          <div className="font-bold text-slate-700 flex items-center gap-1">
-                            <DollarSign className="w-3 h-3 text-emerald-500" />
-                            ${item.medianIncome.toLocaleString()}
-                          </div>
-                        </div>
-                      )}
                     </div>
-
-                    {!item.totalPopulation && (
-                      <p className="text-xs text-muted-foreground italic">Census data not available for this area</p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {censusLoading && adminStats?.byGeography && adminStats.byGeography.length > 0 && (
-        <div>
-          <h2 className="text-lg font-heading font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
-          </h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-          </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

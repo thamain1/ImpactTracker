@@ -70,6 +70,7 @@ client/src/
 - `GET/PUT/DELETE /api/programs/:id` - Get/Update/Delete program
 - `GET/POST /api/impact` - List/Create impact entries
 - `GET /api/impact/stats` - Aggregated impact statistics
+- `GET /api/dashboard/charts?orgId=` - Dashboard chart data (participants by month/program, resources, goal vs actual)
 - `GET /api/impact/export` - CSV export
 - `GET /api/admin/stats` - Admin aggregate statistics
 

@@ -328,6 +328,110 @@ export async function registerRoutes(
     }
   });
 
+  // === Dashboard Charts ===
+  app.get(api.dashboard.charts.path, isAuthenticated, async (req, res) => {
+    try {
+      const currentYear = new Date().getFullYear();
+      const userId = (req.user as any).claims.sub;
+      let orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
+
+      if (orgId) {
+        const roles = await storage.getUserRoles(orgId);
+        const hasAccess = roles.some(r => r.userId === userId);
+        if (!hasAccess) {
+          return res.status(403).json({ message: "Access denied" });
+        }
+      }
+
+      const orgPrograms = await storage.getPrograms(orgId);
+      const orgProgramIds = new Set(orgPrograms.map(p => p.id));
+
+      const allEntries = await storage.getAllImpactEntries();
+      const orgEntries = allEntries.filter(e => orgProgramIds.has(e.programId));
+
+      const programMap = new Map(orgPrograms.map(p => [p.id, p]));
+
+      const ytdEntries = orgEntries.filter(e => {
+        const entryYear = new Date(e.date).getFullYear();
+        return entryYear === currentYear;
+      });
+
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthlyCountsMap: Record<number, number> = {};
+      ytdEntries.forEach(entry => {
+        const month = new Date(entry.date).getMonth();
+        const mv = entry.metricValues as Record<string, number>;
+        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        monthlyCountsMap[month] = (monthlyCountsMap[month] || 0) + total;
+      });
+      const participantsByMonth = monthNames.map((name, i) => ({
+        month: name,
+        count: monthlyCountsMap[i] || 0,
+      }));
+
+      const programCounts: Record<number, number> = {};
+      ytdEntries.forEach(entry => {
+        const mv = entry.metricValues as Record<string, number>;
+        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        programCounts[entry.programId] = (programCounts[entry.programId] || 0) + total;
+      });
+      const participantsByProgram = Object.entries(programCounts).map(([pid, count]) => ({
+        programId: Number(pid),
+        programName: programMap.get(Number(pid))?.name || "Unknown",
+        count,
+      })).sort((a, b) => b.count - a.count);
+
+      const programMetrics: Record<number, Record<string, number>> = {};
+      ytdEntries.forEach(entry => {
+        if (!programMetrics[entry.programId]) programMetrics[entry.programId] = {};
+        const mv = entry.metricValues as Record<string, number>;
+        Object.entries(mv).forEach(([metric, val]) => {
+          programMetrics[entry.programId][metric] = (programMetrics[entry.programId][metric] || 0) + Number(val);
+        });
+      });
+      const resourcesByProgram = Object.entries(programMetrics).map(([pid, metrics]) => ({
+        programId: Number(pid),
+        programName: programMap.get(Number(pid))?.name || "Unknown",
+        metrics,
+      }));
+
+      const goalVsActual = orgPrograms.map(prog => {
+        const progEntries = ytdEntries.filter(e => e.programId === prog.id);
+        const actual = progEntries.reduce((sum, entry) => {
+          const mv = entry.metricValues as Record<string, number>;
+          return sum + Object.values(mv).reduce((s, v) => s + Number(v), 0);
+        }, 0);
+
+        let goalTarget: number | null = null;
+        if (prog.goals) {
+          const match = prog.goals.match(/(\d[\d,]*)/);
+          if (match) {
+            goalTarget = parseInt(match[1].replace(/,/g, ''), 10);
+          }
+        }
+
+        return {
+          programId: prog.id,
+          programName: prog.name,
+          targetPopulation: prog.targetPopulation || null,
+          goals: prog.goals || null,
+          goalTarget,
+          actual,
+        };
+      });
+
+      res.json({
+        participantsByMonth,
+        participantsByProgram,
+        resourcesByProgram,
+        goalVsActual,
+      });
+    } catch (err) {
+      console.error("Dashboard charts error:", err);
+      res.status(500).json({ message: "Failed to fetch dashboard chart data" });
+    }
+  });
+
   // === Admin Stats ===
   app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
     const stats = await storage.getAdminStats();
