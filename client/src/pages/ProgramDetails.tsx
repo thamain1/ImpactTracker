@@ -77,21 +77,36 @@ export default function ProgramDetails() {
     });
   });
 
-  // Prepare chart data - Aggregate by geography for the first metric
   const primaryMetric = program.metrics[0]?.name;
-  const chartData = stats?.reduce((acc, curr) => {
-    const existing = acc.find(item => item.name === curr.geographyValue);
-    if (existing) {
-      existing.value += (curr.metrics[primaryMetric] || 0);
-    } else {
-      acc.push({ 
-        name: curr.geographyValue, 
-        value: curr.metrics[primaryMetric] || 0,
-        level: curr.geographyLevel
-      });
-    }
-    return acc;
-  }, [] as any[]) || [];
+
+  const GEO_LEVELS = ["SPA", "City", "County", "State"] as const;
+  const GEO_LEVEL_COLORS: Record<string, string> = {
+    SPA: "#8b5cf6",
+    City: "#3b82f6",
+    County: "#0d9488",
+    State: "#f97316",
+  };
+
+  const statsByLevel = useMemo(() => {
+    if (!stats) return {};
+    const grouped: Record<string, { name: string; value: number }[]> = {};
+    stats.forEach(stat => {
+      const level = stat.geographyLevel;
+      if (!grouped[level]) grouped[level] = [];
+      const existing = grouped[level].find(item => item.name === stat.geographyValue);
+      if (existing) {
+        existing.value += (stat.metrics[primaryMetric] || 0);
+      } else {
+        grouped[level].push({
+          name: stat.geographyValue,
+          value: stat.metrics[primaryMetric] || 0,
+        });
+      }
+    });
+    return grouped;
+  }, [stats, primaryMetric]);
+
+  const activeLevels = GEO_LEVELS.filter(level => statsByLevel[level]?.length);
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
@@ -151,35 +166,45 @@ export default function ProgramDetails() {
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Chart Section */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="border-slate-200 shadow-sm">
-            <CardHeader>
-              <CardTitle className="font-heading text-lg">Impact by Geography ({primaryMetric})</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[350px]">
-              {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip 
-                      cursor={{ fill: '#f1f5f9' }}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {chartData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-slate-400">
-                  No data to visualize yet
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {activeLevels.length > 0 ? (
+            activeLevels.map(level => {
+              const levelData = statsByLevel[level] || [];
+              const color = GEO_LEVEL_COLORS[level] || COLORS[0];
+              return (
+                <Card key={level} className="border-slate-200 shadow-sm" data-testid={`chart-${level.toLowerCase()}`}>
+                  <CardHeader>
+                    <CardTitle className="font-heading text-lg flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
+                      {level} Impact ({primaryMetric})
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="h-[280px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={levelData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip
+                          cursor={{ fill: '#f1f5f9' }}
+                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                        />
+                        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              );
+            })
+          ) : (
+            <Card className="border-slate-200 shadow-sm">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg">Impact by Geography ({primaryMetric})</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[280px] flex items-center justify-center text-slate-400">
+                No data to visualize yet
+              </CardContent>
+            </Card>
+          )}
 
           {/* Recent Entries Table */}
           <Card className="border-slate-200 shadow-sm">
