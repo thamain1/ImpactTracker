@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
-import { getCensusComparison, getCensusForGeographies } from "./services/census";
+import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from "./services/census";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -127,6 +127,26 @@ export async function registerRoutes(
 
   app.delete(api.programs.delete.path, isAuthenticated, async (req, res) => {
     await storage.deleteProgram(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // === Metrics ===
+  app.post("/api/programs/:programId/metrics", isAuthenticated, async (req, res) => {
+    try {
+      const input = api.metrics.create.input.parse(req.body);
+      const programId = Number(req.params.programId);
+      const metric = await storage.createImpactMetric({ ...input, programId });
+      res.status(201).json(metric);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
+  app.delete("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
+    await storage.deleteImpactMetric(Number(req.params.id));
     res.status(204).send();
   });
 
@@ -273,6 +293,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post(api.census.ageGroups.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.census.ageGroups.input.parse(req.body);
+      const results = await getCensusAgeGroups(input.geographies, input.ageMin, input.ageMax);
+      res.json(results);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
   // === Admin Stats ===
   app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
     const stats = await storage.getAdminStats();
@@ -323,6 +356,8 @@ async function seedDatabase() {
       startDate: "2024-03-15",
       endDate: null,
       targetPopulation: "Youth ages 14-21",
+      targetAgeMin: 14,
+      targetAgeMax: 21,
       goals: "Match 200 mentees with mentors annually",
       locations: "SPA 6, SPA 8",
     }, [

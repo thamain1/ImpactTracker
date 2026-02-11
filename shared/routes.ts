@@ -160,6 +160,25 @@ export const api = {
       },
     },
   },
+  metrics: {
+    create: {
+      method: 'POST' as const,
+      path: '/api/programs/:programId/metrics' as const,
+      input: z.object({ name: z.string().min(1), unit: z.string().min(1) }),
+      responses: {
+        201: z.custom<typeof impactMetrics.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/programs/:programId/metrics/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
   impact: {
     list: {
       method: 'GET' as const,
@@ -259,6 +278,34 @@ export const api = {
           medianIncome: z.number().nullable(),
           isApproximate: z.boolean(),
           approximateNote: z.string().optional(),
+          dataYear: z.number(),
+        })),
+      },
+    },
+    ageGroups: {
+      method: 'POST' as const,
+      path: '/api/census/age-groups' as const,
+      input: z.object({
+        geographies: z.array(z.object({
+          level: z.string(),
+          value: z.string(),
+        })),
+        ageMin: z.number().min(0).optional(),
+        ageMax: z.number().max(120).optional(),
+      }),
+      responses: {
+        200: z.array(z.object({
+          geographyLevel: z.string(),
+          geographyValue: z.string(),
+          totalPopulation: z.number().nullable(),
+          targetAgePopulation: z.number().nullable(),
+          ageGroups: z.array(z.object({
+            label: z.string(),
+            minAge: z.number(),
+            maxAge: z.number(),
+            population: z.number(),
+          })),
+          isApproximate: z.boolean(),
           dataYear: z.number(),
         })),
       },

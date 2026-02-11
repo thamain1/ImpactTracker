@@ -50,3 +50,32 @@ export function useCensusBatch(geographies: { level: string; value: string }[]) 
     staleTime: 1000 * 60 * 60,
   });
 }
+
+export interface AgeGroupResult {
+  geographyLevel: string;
+  geographyValue: string;
+  totalPopulation: number | null;
+  targetAgePopulation: number | null;
+  ageGroups: { label: string; minAge: number; maxAge: number; population: number }[];
+  isApproximate: boolean;
+  dataYear: number;
+}
+
+export function useCensusAgeGroups(
+  geographies: { level: string; value: string }[],
+  ageMin?: number | null,
+  ageMax?: number | null,
+) {
+  return useQuery<AgeGroupResult[]>({
+    queryKey: ["/api/census/age-groups", JSON.stringify(geographies), ageMin, ageMax],
+    queryFn: async () => {
+      const body: any = { geographies };
+      if (ageMin != null) body.ageMin = ageMin;
+      if (ageMax != null) body.ageMax = ageMax;
+      const res = await apiRequest("POST", "/api/census/age-groups", body);
+      return res.json();
+    },
+    enabled: geographies.length > 0,
+    staleTime: 1000 * 60 * 60,
+  });
+}

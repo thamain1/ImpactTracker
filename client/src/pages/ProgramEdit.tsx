@@ -1,18 +1,19 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation, useRoute } from "wouter";
-import { useProgram, useUpdateProgram } from "@/hooks/use-programs";
+import { useProgram, useUpdateProgram, useCreateMetric, useDeleteMetric } from "@/hooks/use-programs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ArrowLeft, Save, Clipboard, MapPin, Users, Target } from "lucide-react";
+import { Loader2, ArrowLeft, Save, Clipboard, MapPin, Users, Target, Plus, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 const formSchema = z.object({
   name: z.string().min(1, "Program name is required"),
@@ -22,6 +23,8 @@ const formSchema = z.object({
   startDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
   endDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
   targetPopulation: z.string().optional().nullable(),
+  targetAgeMin: z.coerce.number().min(0).optional().nullable().transform(v => v || null),
+  targetAgeMax: z.coerce.number().max(120).optional().nullable().transform(v => v || null),
   goals: z.string().optional().nullable(),
   locations: z.string().optional().nullable(),
 });
@@ -34,6 +37,10 @@ export default function ProgramEdit() {
   const [, navigate] = useLocation();
   const { data: program, isLoading } = useProgram(programId);
   const updateProgram = useUpdateProgram(programId);
+  const createMetric = useCreateMetric(programId);
+  const deleteMetric = useDeleteMetric(programId);
+  const [newMetricName, setNewMetricName] = useState("");
+  const [newMetricUnit, setNewMetricUnit] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -45,6 +52,8 @@ export default function ProgramEdit() {
       startDate: "",
       endDate: "",
       targetPopulation: "",
+      targetAgeMin: null,
+      targetAgeMax: null,
       goals: "",
       locations: "",
     },
@@ -60,6 +69,8 @@ export default function ProgramEdit() {
         startDate: program.startDate || "",
         endDate: program.endDate || "",
         targetPopulation: program.targetPopulation || "",
+        targetAgeMin: program.targetAgeMin ?? null,
+        targetAgeMax: program.targetAgeMax ?? null,
         goals: program.goals || "",
         locations: program.locations || "",
       });
@@ -70,6 +81,14 @@ export default function ProgramEdit() {
     updateProgram.mutate(values, {
       onSuccess: () => navigate(`/programs/${programId}`),
     });
+  };
+
+  const handleAddMetric = () => {
+    if (!newMetricName.trim() || !newMetricUnit.trim()) return;
+    createMetric.mutate(
+      { name: newMetricName.trim(), unit: newMetricUnit.trim() },
+      { onSuccess: () => { setNewMetricName(""); setNewMetricUnit(""); } }
+    );
   };
 
   if (isLoading) {
@@ -295,6 +314,56 @@ export default function ProgramEdit() {
                     )}
                   />
 
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="targetAgeMin"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Age Range (Min)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={120}
+                              placeholder="e.g. 14"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-edit-age-min"
+                            />
+                          </FormControl>
+                          <FormDescription>Minimum age of target demographic.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="targetAgeMax"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Age Range (Max)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={120}
+                              placeholder="e.g. 21"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-edit-age-max"
+                            />
+                          </FormControl>
+                          <FormDescription>Maximum age of target demographic.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
                   <FormField
                     control={form.control}
                     name="goals"
@@ -326,20 +395,91 @@ export default function ProgramEdit() {
                     Metrics
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    These are the metrics currently defined for this program. To add or remove metrics, use the program details page.
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    Manage the metrics tracked for this program. Add new metrics or remove existing ones.
                   </p>
+
                   <div className="space-y-2">
                     {program.metrics.map(m => (
-                      <div key={m.id} className="flex items-center justify-between border rounded-md p-3">
-                        <span className="font-medium text-sm text-slate-700">{m.name}</span>
-                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.unit}</span>
+                      <div key={m.id} className="flex items-center justify-between gap-2 border rounded-md p-3">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium text-sm text-slate-700" data-testid={`text-metric-name-${m.id}`}>{m.name}</span>
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.unit}</span>
+                        </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground shrink-0"
+                              data-testid={`button-delete-metric-${m.id}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remove Metric</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to remove "{m.name}"? This won't delete existing impact data, but the metric will no longer appear in new entries.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => deleteMetric.mutate(m.id)}
+                                data-testid={`button-confirm-delete-metric-${m.id}`}
+                              >
+                                Remove
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     ))}
                     {program.metrics.length === 0 && (
                       <p className="text-sm text-muted-foreground italic">No metrics defined yet.</p>
                     )}
+                  </div>
+
+                  <div className="border-t pt-4 mt-4">
+                    <h4 className="text-sm font-medium mb-3">Add New Metric</h4>
+                    <div className="flex gap-3 items-end">
+                      <div className="flex-1">
+                        <label className="text-xs text-muted-foreground">Metric Name</label>
+                        <Input
+                          placeholder="e.g. Meals Served"
+                          value={newMetricName}
+                          onChange={e => setNewMetricName(e.target.value)}
+                          data-testid="input-new-metric-name"
+                        />
+                      </div>
+                      <div className="w-28">
+                        <label className="text-xs text-muted-foreground">Unit</label>
+                        <Input
+                          placeholder="e.g. meals"
+                          value={newMetricUnit}
+                          onChange={e => setNewMetricUnit(e.target.value)}
+                          data-testid="input-new-metric-unit"
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleAddMetric}
+                        disabled={createMetric.isPending || !newMetricName.trim() || !newMetricUnit.trim()}
+                        data-testid="button-add-metric"
+                      >
+                        {createMetric.isPending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-1" />
+                        )}
+                        Add
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

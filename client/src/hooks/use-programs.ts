@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { UpdateProgram } from "@shared/schema";
 import { z } from "zod";
@@ -65,6 +66,45 @@ export function useCreateProgram() {
         description: error.message,
         variant: "destructive",
       });
+    },
+  });
+}
+
+export function useCreateMetric(programId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (data: { name: string; unit: string }) => {
+      const res = await apiRequest("POST", `/api/programs/${programId}/metrics`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.programs.get.path, programId] });
+      queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
+      toast({ title: "Success", description: "Metric added successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useDeleteMetric(programId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async (metricId: number) => {
+      await apiRequest("DELETE", `/api/programs/${programId}/metrics/${metricId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.programs.get.path, programId] });
+      queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
+      toast({ title: "Success", description: "Metric removed" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 }

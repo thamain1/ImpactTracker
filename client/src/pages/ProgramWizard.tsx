@@ -23,6 +23,8 @@ const formSchema = api.programs.create.input.extend({
   startDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
   endDate: z.union([z.string().min(1), z.literal("")]).optional().nullable().transform(v => v || null),
   targetPopulation: z.string().optional(),
+  targetAgeMin: z.coerce.number().min(0).optional().nullable().transform(v => v || null),
+  targetAgeMax: z.coerce.number().max(120).optional().nullable().transform(v => v || null),
   goals: z.string().optional(),
   locations: z.string().optional(),
 });
@@ -53,6 +55,8 @@ export default function ProgramWizard() {
       startDate: "",
       endDate: "",
       targetPopulation: "",
+      targetAgeMin: null,
+      targetAgeMax: null,
       goals: "",
       locations: "",
       metrics: [{ name: "Participants", unit: "people" }],
@@ -330,6 +334,56 @@ export default function ProgramWizard() {
                       </FormItem>
                     )}
                   />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="targetAgeMin"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Age Range (Min)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={120}
+                              placeholder="e.g. 14"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-age-min"
+                            />
+                          </FormControl>
+                          <FormDescription>Minimum age of target demographic.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="targetAgeMax"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Target Age Range (Max)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={120}
+                              placeholder="e.g. 21"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-age-max"
+                            />
+                          </FormControl>
+                          <FormDescription>Maximum age of target demographic.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <FormField
                     control={form.control}

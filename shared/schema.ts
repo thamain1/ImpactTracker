@@ -37,6 +37,8 @@ export const programs = pgTable("programs", {
   startDate: date("start_date"),
   endDate: date("end_date"),
   targetPopulation: text("target_population"),
+  targetAgeMin: integer("target_age_min"),
+  targetAgeMax: integer("target_age_max"),
   goals: text("goals"),
   locations: text("locations"),
   createdAt: timestamp("created_at").defaultNow(),
