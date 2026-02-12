@@ -29,6 +29,45 @@ export function useImpactEntries(programId: number) {
   });
 }
 
+export function useUpdateImpactEntry() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, programId, ...data }: { id: number; programId: number } & Record<string, any>) => {
+      const res = await fetch(`/api/impact/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update impact entry");
+      }
+
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [api.impact.list.path, variables.programId] });
+      queryClient.invalidateQueries({ queryKey: [api.impact.stats.path, variables.programId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/charts"] });
+      toast({
+        title: "Entry Updated",
+        description: "Your impact entry has been updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useCreateImpactEntry() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

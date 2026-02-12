@@ -200,6 +200,16 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/impact/:id' as const,
+      input: insertImpactEntrySchema.partial(),
+      responses: {
+        200: z.custom<typeof impactEntries.$inferSelect>(),
+        404: errorSchemas.notFound,
+        400: errorSchemas.validation,
+      },
+    },
     stats: {
       method: 'GET' as const,
       path: '/api/impact/stats' as const,

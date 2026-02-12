@@ -33,6 +33,7 @@ export interface IStorage {
 
   getImpactEntries(programId: number, geographyLevel?: string): Promise<ImpactEntry[]>;
   createImpactEntry(entry: InsertImpactEntry & { userId: string }): Promise<ImpactEntry>;
+  updateImpactEntry(id: number, updates: Partial<InsertImpactEntry>): Promise<ImpactEntry | undefined>;
   getAllImpactEntries(): Promise<ImpactEntry[]>;
 
   getCensusData(geographyLevel: string, geographyValue: string): Promise<CensusCache | undefined>;
@@ -181,6 +182,11 @@ export class DatabaseStorage implements IStorage {
   async createImpactEntry(entry: InsertImpactEntry & { userId: string }): Promise<ImpactEntry> {
     const [newEntry] = await db.insert(impactEntries).values(entry).returning();
     return newEntry;
+  }
+
+  async updateImpactEntry(id: number, updates: Partial<InsertImpactEntry>): Promise<ImpactEntry | undefined> {
+    const [updated] = await db.update(impactEntries).set(updates).where(eq(impactEntries.id, id)).returning();
+    return updated;
   }
 
   async getAllImpactEntries(): Promise<ImpactEntry[]> {

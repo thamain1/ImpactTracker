@@ -175,6 +175,32 @@ export async function registerRoutes(
     }
   });
 
+  app.put("/api/impact/:id", isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const userId = (req as any).user?.id;
+      const allEntries = await storage.getAllImpactEntries();
+      const existing = allEntries.find(e => e.id === id);
+      if (!existing) return res.status(404).json({ message: "Impact entry not found" });
+      if (existing.userId !== userId) {
+        const program = await storage.getProgram(existing.programId);
+        if (!program) return res.status(404).json({ message: "Program not found" });
+        const roles = await storage.getUserRoles(userId);
+        const hasAccess = roles.some(r => r.orgId === program.orgId);
+        if (!hasAccess) return res.status(403).json({ message: "Not authorized to edit this entry" });
+      }
+      const input = api.impact.update.input.parse(req.body);
+      const updated = await storage.updateImpactEntry(id, input);
+      if (!updated) return res.status(404).json({ message: "Impact entry not found" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
   app.get(api.impact.stats.path, isAuthenticated, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });

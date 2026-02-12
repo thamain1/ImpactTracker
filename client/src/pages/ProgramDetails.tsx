@@ -3,10 +3,12 @@ import { useProgram } from "@/hooks/use-programs";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups, type CensusComparison } from "@/hooks/use-census";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
+import { EditImpactDialog } from "@/components/EditImpactDialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import type { ImpactEntry } from "@shared/schema";
 import {
   BarChart,
   Bar,
@@ -29,6 +31,7 @@ const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6", "#ec4899"];
 export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
   const programId = parseInt(params?.id || "0");
+  const [editingEntry, setEditingEntry] = useState<ImpactEntry | null>(null);
 
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
@@ -219,7 +222,8 @@ export default function ProgramDetails() {
                     <tr className="border-b border-slate-100">
                       <th className="text-left font-medium text-slate-500 pb-3 pl-2">Date</th>
                       <th className="text-left font-medium text-slate-500 pb-3">Location</th>
-                      <th className="text-right font-medium text-slate-500 pb-3 pr-2">Impact</th>
+                      <th className="text-right font-medium text-slate-500 pb-3">Impact</th>
+                      <th className="text-right font-medium text-slate-500 pb-3 pr-2 w-10"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -236,7 +240,7 @@ export default function ProgramDetails() {
                             <span className="font-medium text-slate-700">{entry.geographyValue}</span>
                           </div>
                         </td>
-                        <td className="py-3 pr-2 text-right">
+                        <td className="py-3 text-right">
                           <div className="flex flex-col items-end gap-1">
                             {Object.entries(entry.metricValues as Record<string, number>).slice(0, 2).map(([key, val]) => (
                               <span key={key} className="text-xs text-slate-600">
@@ -245,11 +249,21 @@ export default function ProgramDetails() {
                             ))}
                           </div>
                         </td>
+                        <td className="py-3 pr-2 text-right">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setEditingEntry(entry)}
+                            data-testid={`button-edit-entry-${entry.id}`}
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                        </td>
                       </tr>
                     ))}
                     {!entries?.length && (
                       <tr>
-                        <td colSpan={3} className="py-8 text-center text-slate-400">
+                        <td colSpan={4} className="py-8 text-center text-slate-400">
                           No recent entries found
                         </td>
                       </tr>
@@ -499,6 +513,14 @@ export default function ProgramDetails() {
             })}
           </div>
         </div>
+      )}
+      {program && editingEntry && (
+        <EditImpactDialog
+          program={program}
+          entry={editingEntry}
+          open={!!editingEntry}
+          onOpenChange={(open) => { if (!open) setEditingEntry(null); }}
+        />
       )}
     </div>
   );
