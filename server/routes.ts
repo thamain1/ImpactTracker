@@ -276,8 +276,26 @@ export async function registerRoutes(
   // === Census ===
   app.get(api.census.comparison.path, isAuthenticated, async (req, res) => {
     try {
-      const rawGeographies = await storage.getDistinctGeographies();
-      const allEntries = await storage.getAllImpactEntries();
+      const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
+
+      let allEntries = await storage.getAllImpactEntries();
+
+      if (orgId) {
+        const orgPrograms = await storage.getPrograms(orgId);
+        const orgProgramIds = new Set(orgPrograms.map(p => p.id));
+        allEntries = allEntries.filter(e => orgProgramIds.has(e.programId));
+      }
+
+      const rawGeographies: { level: string; value: string }[] = [];
+      const seen = new Set<string>();
+      allEntries.forEach(entry => {
+        if (!entry.geographyValue) return;
+        const key = `${entry.geographyLevel}:${entry.geographyValue}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          rawGeographies.push({ level: entry.geographyLevel, value: entry.geographyValue });
+        }
+      });
 
       const { expanded: geographies } = expandGeographies(rawGeographies);
 

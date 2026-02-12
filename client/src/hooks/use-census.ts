@@ -32,9 +32,18 @@ export interface CensusComparisonWithImpact extends CensusComparison {
   reachPercent: number | null;
 }
 
-export function useCensusComparison() {
+export function useCensusComparison(orgId?: number) {
   return useQuery<CensusComparisonWithImpact[]>({
-    queryKey: ["/api/census/comparison"],
+    queryKey: ["/api/census/comparison", orgId],
+    queryFn: async () => {
+      const url = orgId
+        ? `/api/census/comparison?orgId=${orgId}`
+        : "/api/census/comparison";
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Census comparison failed");
+      return res.json();
+    },
+    enabled: !!orgId,
     staleTime: 1000 * 60 * 60,
   });
 }
