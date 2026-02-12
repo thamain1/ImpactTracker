@@ -71,15 +71,21 @@ export default function Dashboard() {
 
   const currentYear = new Date().getFullYear();
 
+  const participantKeywords = ["participant", "enrolled", "people", "served", "attended", "members", "clients", "youth"];
+  const isParticipantMetric = (name: string) =>
+    participantKeywords.some(kw => name.toLowerCase().includes(kw));
+
   const allResourceMetrics: { name: string; total: number; programName: string }[] = [];
   if (chartData?.resourcesByProgram) {
     chartData.resourcesByProgram.forEach((prog: any) => {
       Object.entries(prog.metrics).forEach(([metricName, val]) => {
-        allResourceMetrics.push({
-          name: metricName,
-          total: val as number,
-          programName: prog.programName,
-        });
+        if (!isParticipantMetric(metricName)) {
+          allResourceMetrics.push({
+            name: metricName,
+            total: val as number,
+            programName: prog.programName,
+          });
+        }
       });
     });
   }
