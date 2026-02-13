@@ -192,7 +192,10 @@ export async function registerRoutes(
         if (!hasRoleAccess && !isOrgMember) return res.status(403).json({ message: "Not authorized to edit this entry" });
       }
       const input = api.impact.update.input.parse(req.body);
-      const updated = await storage.updateImpactEntry(id, input);
+      const cleanInput = Object.fromEntries(
+        Object.entries(input).filter(([_, v]) => v !== undefined)
+      );
+      const updated = await storage.updateImpactEntry(id, cleanInput);
       if (!updated) return res.status(404).json({ message: "Impact entry not found" });
       res.json(updated);
     } catch (err) {
