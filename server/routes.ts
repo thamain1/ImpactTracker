@@ -178,18 +178,16 @@ export async function registerRoutes(
   app.put("/api/impact/:id", isAuthenticated, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const userId = String((req as any).user?.id);
+      const userId = String((req.user as any)?.claims?.sub);
       const allEntries = await storage.getAllImpactEntries();
       const existing = allEntries.find(e => e.id === id);
       if (!existing) return res.status(404).json({ message: "Impact entry not found" });
       if (String(existing.userId) !== userId) {
         const program = await storage.getProgram(existing.programId);
         if (!program) return res.status(404).json({ message: "Program not found" });
-        const roles = await storage.getUserRoles(userId);
-        const orgs = await storage.getOrganizations();
-        const hasRoleAccess = roles.some(r => r.orgId === program.orgId);
-        const isOrgMember = orgs.some(o => o.id === program.orgId);
-        if (!hasRoleAccess && !isOrgMember) return res.status(403).json({ message: "Not authorized to edit this entry" });
+        const roles = await storage.getUserRoles(program.orgId);
+        const hasRoleAccess = roles.some(r => r.userId === userId);
+        if (!hasRoleAccess) return res.status(403).json({ message: "Not authorized to edit this entry" });
       }
       const input = api.impact.update.input.parse(req.body);
       const cleanInput = Object.fromEntries(
