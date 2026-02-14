@@ -1,17 +1,48 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, Area, AreaChart } from "recharts";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { usePrograms } from "@/hooks/use-programs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileBarChart, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users } from "lucide-react";
+import { Download, FileBarChart, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { api } from "@shared/routes";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
+
+function useGeocode(locations: string[]) {
+  const [coords, setCoords] = useState<Record<string, [number, number]>>({});
+  const fetched = useRef(new Set<string>());
+
+  useEffect(() => {
+    locations.forEach(async (loc) => {
+      if (fetched.current.has(loc) || coords[loc]) return;
+      fetched.current.add(loc);
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc)}&limit=1`);
+        const data = await res.json();
+        if (data?.[0]) {
+          setCoords(prev => ({ ...prev, [loc]: [parseFloat(data[0].lat), parseFloat(data[0].lon)] }));
+        }
+      } catch {}
+    });
+  }, [locations]);
+
+  return coords;
+}
 
 const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6", "#ef4444"];
 
@@ -51,6 +82,66 @@ export default function Reports() {
     selectedProgram?.targetAgeMin,
     selectedProgram?.targetAgeMax,
   );
+
+  const serviceAreaLocations = useMemo(() => {
+    const locs: string[] = [];
+    if (selectedProgram?.locations) {
+      selectedProgram.locations.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).forEach(l => locs.push(l));
+    }
+    stats?.forEach(s => {
+      const label = `${s.geographyValue}, ${s.geographyLevel === "State" ? "USA" : "California"}`;
+      if (!locs.includes(label) && !locs.includes(s.geographyValue)) {
+        locs.push(label);
+      }
+    });
+    return locs;
+  }, [selectedProgram, stats]);
+
+  const geoCoords = useGeocode(serviceAreaLocations);
+
+  const participantsByMonth = useMemo(() => {
+    if (!entries || !primaryMetric) return [];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthCounts: Record<number, number> = {};
+    entries.forEach(entry => {
+      const month = new Date(entry.date).getMonth();
+      const mv = entry.metricValues as Record<string, number>;
+      monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
+    });
+    return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
+  }, [entries, primaryMetric]);
+
+  const goalData = useMemo(() => {
+    if (!selectedProgram || !entries || !primaryMetric) return null;
+    let goalTarget: number | null = null;
+    if (selectedProgram.goals) {
+      const match = selectedProgram.goals.match(/(\d[\d,]*)/);
+      if (match) goalTarget = parseInt(match[1].replace(/,/g, ''), 10);
+    }
+    const actual = entries.reduce((sum, entry) => {
+      const mv = entry.metricValues as Record<string, number>;
+      return sum + Number(mv[primaryMetric] || 0);
+    }, 0);
+    return { goalTarget, actual, goals: selectedProgram.goals };
+  }, [selectedProgram, entries, primaryMetric]);
+
+  const totalCensusPop = useMemo(() => {
+    if (!censusData) return 0;
+    return censusData.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
+  }, [censusData]);
+
+  const totalAgePop = useMemo(() => {
+    if (!ageGroupData) return 0;
+    return ageGroupData.reduce((sum, g) => sum + (g.targetAgePopulation || 0), 0);
+  }, [ageGroupData]);
+
+  const totalImpact = useMemo(() => {
+    if (!entries || !primaryMetric) return 0;
+    return entries.reduce((sum, entry) => {
+      const mv = entry.metricValues as Record<string, number>;
+      return sum + Number(mv[primaryMetric] || 0);
+    }, 0);
+  }, [entries, primaryMetric]);
 
   const geoLevelData = stats?.reduce((acc, curr) => {
     const existing = acc.find(item => item.name === curr.geographyLevel);
@@ -240,6 +331,258 @@ export default function Reports() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Program Overview */}
+          {selectedProgram && (
+            <Card data-testid="card-program-overview">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg flex items-center gap-2">
+                  <ClipboardList className="w-5 h-5 text-primary" />
+                  {selectedProgram.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {selectedProgram.description && (
+                  <p className="text-sm text-muted-foreground leading-relaxed">{selectedProgram.description}</p>
+                )}
+                <div className="grid sm:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" /> Target Population
+                    </p>
+                    <p className="text-sm font-medium text-slate-800" data-testid="text-target-population">
+                      {selectedProgram.targetPopulation || "Not specified"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1">
+                      <Target className="w-3.5 h-3.5" /> Program Goal
+                    </p>
+                    <p className="text-sm font-medium text-slate-800" data-testid="text-program-goal">
+                      {selectedProgram.goals || "Not specified"}
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" /> Age Range
+                    </p>
+                    <p className="text-sm font-medium text-slate-800" data-testid="text-age-range">
+                      {selectedProgram.targetAgeMin != null || selectedProgram.targetAgeMax != null
+                        ? `${selectedProgram.targetAgeMin ?? 0}${selectedProgram.targetAgeMax ? `\u2013${selectedProgram.targetAgeMax}` : "+"} years`
+                        : "All ages"}
+                    </p>
+                  </div>
+                </div>
+                {(selectedProgram.startDate || selectedProgram.endDate) && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">
+                      {selectedProgram.startDate && `Start: ${format(new Date(selectedProgram.startDate), 'MMM d, yyyy')}`}
+                      {selectedProgram.startDate && selectedProgram.endDate && " \u2014 "}
+                      {selectedProgram.endDate && `End: ${format(new Date(selectedProgram.endDate), 'MMM d, yyyy')}`}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Service Area Map */}
+          {Object.keys(geoCoords).length > 0 && (
+            <Card data-testid="card-service-area-map">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  Area of Service
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[400px] rounded-md overflow-hidden">
+                  <MapContainer
+                    center={Object.values(geoCoords)[0]}
+                    zoom={8}
+                    style={{ height: "100%", width: "100%" }}
+                    scrollWheelZoom={false}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    {Object.entries(geoCoords).map(([name, pos]) => (
+                      <Marker key={name} position={pos}>
+                        <Popup>
+                          <span className="font-medium">{name}</span>
+                        </Popup>
+                      </Marker>
+                    ))}
+                  </MapContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Participants by Month */}
+          <Card data-testid="card-participants-by-month">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg">Participants by Month</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              {participantsByMonth.some(m => m.count > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={participantsByMonth} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <Area type="monotone" dataKey="count" stroke="#0d9488" strokeWidth={2} fillOpacity={1} fill="url(#colorCount)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-muted-foreground">No monthly data available</div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Goal vs. Actual */}
+          {goalData && goalData.goalTarget !== null && (
+            <Card data-testid="card-goal-vs-actual">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg flex items-center gap-2">
+                  <Target className="w-5 h-5 text-primary" />
+                  Goal vs. Actual
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid sm:grid-cols-2 gap-6">
+                  <div className="h-[250px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={[{ name: selectedProgram?.name || "Program", goal: goalData.goalTarget, actual: goalData.actual }]} margin={{ top: 10, right: 30, left: 0, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                        <Legend />
+                        <Bar dataKey="goal" name="Goal" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="actual" name="Actual" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="flex flex-col justify-center space-y-4">
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase">Goal</p>
+                      <p className="text-3xl font-heading font-bold text-slate-900" data-testid="text-goal-target">{goalData.goalTarget!.toLocaleString()}</p>
+                      {goalData.goals && <p className="text-sm text-muted-foreground mt-1">{goalData.goals}</p>}
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium uppercase">Actual</p>
+                      <p className="text-3xl font-heading font-bold text-primary" data-testid="text-goal-actual">{goalData.actual.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                        <span className="text-muted-foreground">Progress</span>
+                        <span className="font-bold text-emerald-600">{goalData.goalTarget! > 0 ? Math.round((goalData.actual / goalData.goalTarget!) * 100) : 0}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-3">
+                        <div
+                          className="bg-primary rounded-full h-3 transition-all"
+                          style={{ width: `${goalData.goalTarget! > 0 ? Math.min(Math.round((goalData.actual / goalData.goalTarget!) * 100), 100) : 0}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Program Target & Populations / Progress */}
+          <Card data-testid="card-program-progress">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-primary" />
+                Program Target & Populations
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {totalCensusPop > 0 && (
+                <div>
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Total Census Population (Service Area)</span>
+                    <span className="font-bold text-slate-900">{totalCensusPop.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Total Impact</span>
+                    <span className="font-bold text-primary">{totalImpact.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Population Reached</span>
+                    <span className="font-bold text-emerald-600">
+                      {totalImpact > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
+                    <div
+                      className="bg-primary rounded-full h-2.5 transition-all"
+                      style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {hasAgeTarget && totalAgePop > 0 && (
+                <div className="pt-3 border-t">
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">
+                      Target Age Population ({selectedProgram?.targetAgeMin ?? 0}{selectedProgram?.targetAgeMax ? `\u2013${selectedProgram.targetAgeMax}` : "+"})
+                    </span>
+                    <span className="font-bold text-slate-900">{totalAgePop.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Target Age Reached</span>
+                    <span className="font-bold text-emerald-600">
+                      {totalImpact > 0 ? `${(Math.round((totalImpact / totalAgePop) * 10000) / 100)}%` : "0%"}
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
+                    <div
+                      className="bg-emerald-500 rounded-full h-2.5 transition-all"
+                      style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalAgePop) * 100 : 0, 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {goalData && goalData.goalTarget !== null && goalData.goalTarget > 0 && (
+                <div className="pt-3 border-t">
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Goal Target</span>
+                    <span className="font-bold text-slate-900">{goalData.goalTarget.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-sm mb-1">
+                    <span className="text-muted-foreground">Goal Progress</span>
+                    <span className="font-bold text-emerald-600">
+                      {Math.round((goalData.actual / goalData.goalTarget) * 100)}%
+                    </span>
+                  </div>
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
+                    <div
+                      className="bg-amber-500 rounded-full h-2.5 transition-all"
+                      style={{ width: `${Math.min(Math.round((goalData.actual / goalData.goalTarget) * 100), 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!totalCensusPop && !totalAgePop && (!goalData || goalData.goalTarget === null) && (
+                <p className="text-sm text-muted-foreground italic">No population or goal data available for this program</p>
+              )}
+            </CardContent>
+          </Card>
         </>
       ) : activeTab === "data" ? (
         /* Raw Data Tab */
