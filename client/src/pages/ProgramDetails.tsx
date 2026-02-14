@@ -1,7 +1,6 @@
 import { useRoute } from "wouter";
 import { useProgram } from "@/hooks/use-programs";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
-import { useCensusBatch, useCensusAgeGroups, type CensusComparison } from "@/hooks/use-census";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
 import { EditImpactDialog } from "@/components/EditImpactDialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -21,7 +20,7 @@ import {
   Legend
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, TrendingUp, DollarSign, AlertTriangle, Info, Pencil, Users } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { api } from "@shared/routes";
@@ -36,22 +35,6 @@ export default function ProgramDetails() {
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: entries, isLoading: entriesLoading } = useImpactEntries(programId);
-
-  const geoList = useMemo(() => {
-    if (!stats) return [];
-    const unique = new Map<string, { level: string; value: string }>();
-    stats.forEach(s => unique.set(`${s.geographyLevel}:${s.geographyValue}`, { level: s.geographyLevel, value: s.geographyValue }));
-    return Array.from(unique.values());
-  }, [stats]);
-
-  const { data: censusData } = useCensusBatch(geoList);
-
-  const hasAgeTarget = !!(program?.targetAgeMin != null || program?.targetAgeMax != null);
-  const { data: ageGroupData } = useCensusAgeGroups(
-    geoList,
-    program?.targetAgeMin,
-    program?.targetAgeMax,
-  );
 
   const primaryMetric = program?.metrics[0]?.name;
 
@@ -315,205 +298,6 @@ export default function ProgramDetails() {
         </div>
       </div>
 
-      {/* Census Comparison Section */}
-      {censusData && censusData.length > 0 && (
-        <div>
-          <h2 className="text-xl font-heading font-bold text-slate-900 mb-2 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5 text-primary" /> Census Comparison
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            How this program's impact compares to census population data ({censusData[0]?.dataYear} ACS) across all geographic levels
-          </p>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...censusData]
-              .sort((a, b) => {
-                const order = ["SPA", "City", "County", "State"];
-                return order.indexOf(a.geographyLevel) - order.indexOf(b.geographyLevel);
-              })
-              .map((census, i) => {
-              const matchingStat = stats?.find(
-                s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
-              );
-              const impactTotal = matchingStat
-                ? Object.values(matchingStat.metrics).reduce((sum, v) => sum + v, 0)
-                : 0;
-              const reachPercent = census.totalPopulation && impactTotal > 0
-                ? Math.round((impactTotal / census.totalPopulation) * 10000) / 100
-                : null;
-
-              return (
-                <Card key={`census-${i}`} data-testid={`census-program-card-${i}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <Badge variant="outline" className="text-xs">{census.geographyLevel}</Badge>
-                      <span className="font-semibold text-sm text-slate-800">{census.geographyValue}</span>
-                      {census.isApproximate && (
-                        <span title={census.approximateNote}>
-                          <Info className="w-3.5 h-3.5 text-amber-500" />
-                        </span>
-                      )}
-                    </div>
-
-                    {census.totalPopulation ? (
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                            <span className="text-muted-foreground">Census Population</span>
-                            <span className="font-bold text-slate-900">{census.totalPopulation.toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                            <span className="text-muted-foreground">Program Impact</span>
-                            <span className="font-bold text-primary">{impactTotal.toLocaleString()}</span>
-                          </div>
-                          {reachPercent !== null && (
-                            <div className="mt-2">
-                              <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                                <span className="text-muted-foreground">Population Reached</span>
-                                <span className="font-bold text-emerald-600">{reachPercent}%</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-2">
-                                <div
-                                  className="bg-primary rounded-full h-2 transition-all"
-                                  style={{ width: `${Math.min(reachPercent, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-2 border-t flex items-center justify-between gap-2 flex-wrap">
-                          {census.povertyRate !== null && (
-                            <div className="text-xs">
-                              <span className="text-muted-foreground">Poverty Rate</span>
-                              <div className="font-bold text-slate-700 flex items-center gap-1">
-                                <AlertTriangle className="w-3 h-3 text-amber-500" />
-                                {census.povertyRate}%
-                              </div>
-                            </div>
-                          )}
-                          {census.medianIncome !== null && (
-                            <div className="text-xs">
-                              <span className="text-muted-foreground">Median Income</span>
-                              <div className="font-bold text-slate-700 flex items-center gap-1">
-                                <DollarSign className="w-3 h-3 text-emerald-500" />
-                                ${census.medianIncome.toLocaleString()}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground italic">Census data not available for this area</p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Age Demographics Census Section */}
-      {hasAgeTarget && ageGroupData && ageGroupData.length > 0 && (
-        <div>
-          <h2 className="text-xl font-heading font-bold text-slate-900 mb-2 flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" /> Age Demographics
-          </h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Census age group data for target demographic: ages {program.targetAgeMin ?? 0}{program.targetAgeMax ? `\u2013${program.targetAgeMax}` : "+"}
-          </p>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {ageGroupData.map((geo, i) => {
-              const matchingStat = stats?.find(
-                s => s.geographyLevel === geo.geographyLevel && s.geographyValue === geo.geographyValue
-              );
-              const impactTotal = matchingStat
-                ? Object.values(matchingStat.metrics).reduce((sum, v) => sum + v, 0)
-                : 0;
-              const targetPop = geo.targetAgePopulation;
-              const ageReachPercent = targetPop && impactTotal > 0
-                ? Math.round((impactTotal / targetPop) * 10000) / 100
-                : null;
-
-              const minAge = program.targetAgeMin ?? 0;
-              const maxAge = program.targetAgeMax ?? 120;
-              const relevantGroups = geo.ageGroups.filter(
-                ag => ag.maxAge >= minAge && ag.minAge <= maxAge
-              );
-
-              return (
-                <Card key={`age-${i}`} data-testid={`age-census-card-${i}`}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
-                      <Badge variant="outline" className="text-xs">{geo.geographyLevel}</Badge>
-                      <span className="font-semibold text-sm text-slate-800">{geo.geographyValue}</span>
-                      {geo.isApproximate && (
-                        <span title="Approximate data based on LA County estimates">
-                          <Info className="w-3.5 h-3.5 text-amber-500" />
-                        </span>
-                      )}
-                    </div>
-
-                    {targetPop ? (
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                            <span className="text-muted-foreground">Target Age Population</span>
-                            <span className="font-bold text-slate-900">{targetPop.toLocaleString()}</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                            <span className="text-muted-foreground">Program Impact</span>
-                            <span className="font-bold text-primary">{impactTotal.toLocaleString()}</span>
-                          </div>
-                          {ageReachPercent !== null && (
-                            <div className="mt-2">
-                              <div className="flex items-center justify-between gap-2 text-sm mb-1">
-                                <span className="text-muted-foreground">Target Age Reached</span>
-                                <span className="font-bold text-emerald-600">{ageReachPercent}%</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-2">
-                                <div
-                                  className="bg-emerald-500 rounded-full h-2 transition-all"
-                                  style={{ width: `${Math.min(ageReachPercent, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="pt-2 border-t">
-                          <p className="text-xs text-muted-foreground mb-2">Age Breakdown (target range)</p>
-                          <div className="space-y-1.5">
-                            {relevantGroups.map(ag => {
-                              const pct = targetPop > 0 ? Math.round((ag.population / targetPop) * 100) : 0;
-                              return (
-                                <div key={ag.label} className="flex items-center gap-2 text-xs">
-                                  <span className="w-14 text-muted-foreground shrink-0">{ag.label}</span>
-                                  <div className="flex-1 bg-slate-100 rounded-full h-1.5">
-                                    <div
-                                      className="bg-primary/70 rounded-full h-1.5 transition-all"
-                                      style={{ width: `${Math.min(pct, 100)}%` }}
-                                    />
-                                  </div>
-                                  <span className="w-16 text-right text-slate-600 shrink-0">{ag.population.toLocaleString()}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground italic">Age group data not available for this area</p>
-                    )}
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-        </div>
-      )}
       {program && editingEntry && (
         <EditImpactDialog
           program={program}
