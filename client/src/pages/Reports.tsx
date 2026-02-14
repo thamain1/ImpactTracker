@@ -155,12 +155,39 @@ export default function Reports() {
               {["SPA", "City", "County", "State"].map(level => {
                 const levelStats = stats.filter(s => s.geographyLevel === level);
                 const total = levelStats.reduce((sum, s) => sum + (s.metrics[primaryMetric] || 0), 0);
+                const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
+                const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
+                const reachPct = levelPop > 0 && total > 0
+                  ? Math.round((total / levelPop) * 10000) / 100
+                  : null;
                 return (
-                  <Card key={level}>
+                  <Card key={level} data-testid={`geo-card-${level.toLowerCase()}`}>
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground font-medium uppercase">{level}</p>
                       <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
                       <p className="text-xs text-muted-foreground">{primaryMetric}</p>
+                      {levelPop > 0 && (
+                        <div className="mt-2 pt-2 border-t space-y-1">
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <span className="text-muted-foreground">Population</span>
+                            <span className="font-semibold text-slate-700">{levelPop.toLocaleString()}</span>
+                          </div>
+                          {reachPct !== null && (
+                            <div>
+                              <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                                <span className="text-muted-foreground">Reach</span>
+                                <span className="font-semibold text-emerald-600">{reachPct}%</span>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-1.5">
+                                <div
+                                  className="bg-primary rounded-full h-1.5 transition-all"
+                                  style={{ width: `${Math.min(reachPct, 100)}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 );
