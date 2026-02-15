@@ -26,6 +26,7 @@ const formSchema = z.object({
   targetAgeMin: z.coerce.number().min(0).optional().nullable().transform(v => v || null),
   targetAgeMax: z.coerce.number().max(120).optional().nullable().transform(v => v || null),
   goals: z.string().optional().nullable(),
+  costPerParticipant: z.string().optional().nullable(),
   locations: z.string().optional().nullable(),
 });
 
@@ -55,6 +56,7 @@ export default function ProgramEdit() {
       targetAgeMin: null,
       targetAgeMax: null,
       goals: "",
+      costPerParticipant: "",
       locations: "",
     },
   });
@@ -72,6 +74,7 @@ export default function ProgramEdit() {
         targetAgeMin: program.targetAgeMin ?? null,
         targetAgeMax: program.targetAgeMax ?? null,
         goals: program.goals || "",
+        costPerParticipant: (program as any).costPerParticipant || "",
         locations: program.locations || "",
       });
     }
@@ -379,6 +382,26 @@ export default function ProgramEdit() {
                           />
                         </FormControl>
                         <FormDescription>List the measurable outcomes you aim to achieve.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="costPerParticipant"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cost Per Participant</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. $25.00"
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-edit-cost-per-participant"
+                          />
+                        </FormControl>
+                        <FormDescription>Average cost per participant served.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

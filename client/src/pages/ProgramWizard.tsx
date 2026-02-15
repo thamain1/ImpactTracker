@@ -58,6 +58,7 @@ export default function ProgramWizard() {
       targetAgeMin: null,
       targetAgeMax: null,
       goals: "",
+      costPerParticipant: "",
       locations: "",
       metrics: [{ name: "Participants", unit: "people" }],
     },
@@ -400,6 +401,26 @@ export default function ProgramWizard() {
                           />
                         </FormControl>
                         <FormDescription>List the measurable outcomes you aim to achieve.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="costPerParticipant"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cost Per Participant</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. $25.00"
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-cost-per-participant"
+                          />
+                        </FormControl>
+                        <FormDescription>Average cost per participant served.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

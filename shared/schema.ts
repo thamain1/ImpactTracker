@@ -40,6 +40,7 @@ export const programs = pgTable("programs", {
   targetAgeMin: integer("target_age_min"),
   targetAgeMax: integer("target_age_max"),
   goals: text("goals"),
+  costPerParticipant: text("cost_per_participant"),
   locations: text("locations"),
   createdAt: timestamp("created_at").defaultNow(),
 });
