@@ -234,6 +234,10 @@ export default function ProgramWizard() {
                             <SelectItem value="Youth Development">Youth Development</SelectItem>
                             <SelectItem value="Employment">Employment</SelectItem>
                             <SelectItem value="Community Development">Community Development</SelectItem>
+                            <SelectItem value="Community Engagement">Community Engagement</SelectItem>
+                            <SelectItem value="Reentry Program">Reentry Program</SelectItem>
+                            <SelectItem value="System Impacted Program">System Impacted Program</SelectItem>
+                            <SelectItem value="Mental Health">Mental Health</SelectItem>
                             <SelectItem value="Other">Other</SelectItem>
                           </SelectContent>
                         </Select>
