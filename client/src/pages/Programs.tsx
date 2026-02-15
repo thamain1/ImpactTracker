@@ -181,7 +181,7 @@ export default function Programs() {
                   </p>
                   {program.startDate && (
                     <p className="text-xs text-muted-foreground mb-3">
-                      Started {format(new Date(program.startDate), 'MMM d, yyyy')}
+                      Started {format(new Date(program.startDate + 'T00:00:00'), 'MMM d, yyyy')}
                     </p>
                   )}
                   <div className="flex gap-1 flex-wrap mb-4">
@@ -261,7 +261,7 @@ export default function Programs() {
                           </Badge>
                         </td>
                         <td className="p-4 text-muted-foreground">
-                          {program.startDate ? format(new Date(program.startDate), 'MMM d, yyyy') : "-"}
+                          {program.startDate ? format(new Date(program.startDate + 'T00:00:00'), 'MMM d, yyyy') : "-"}
                         </td>
                         <td className="p-4">
                           <span className="text-muted-foreground">{program.metrics.length} metrics</span>

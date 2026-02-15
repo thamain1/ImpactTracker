@@ -180,7 +180,7 @@ export default function AdminDashboard() {
                       <div>
                         <p className="font-medium text-slate-800">{prog.name}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          {prog.type || "General"} {prog.startDate ? `- Started ${format(new Date(prog.startDate), 'MMM yyyy')}` : ""}
+                          {prog.type || "General"} {prog.startDate ? `- Started ${format(new Date(prog.startDate + 'T00:00:00'), 'MMM yyyy')}` : ""}
                         </p>
                       </div>
                       <Badge variant="outline" className="text-xs shrink-0 ml-2">

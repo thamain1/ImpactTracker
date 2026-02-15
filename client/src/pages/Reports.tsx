@@ -295,9 +295,9 @@ export default function Reports() {
                 {(selectedProgram.startDate || selectedProgram.endDate) && (
                   <div className="pt-2 border-t">
                     <p className="text-xs text-muted-foreground">
-                      {selectedProgram.startDate && `Start: ${format(new Date(selectedProgram.startDate), 'MMM d, yyyy')}`}
+                      {selectedProgram.startDate && `Start: ${format(new Date(selectedProgram.startDate + 'T00:00:00'), 'MMM d, yyyy')}`}
                       {selectedProgram.startDate && selectedProgram.endDate && " \u2014 "}
-                      {selectedProgram.endDate && `End: ${format(new Date(selectedProgram.endDate), 'MMM d, yyyy')}`}
+                      {selectedProgram.endDate && `End: ${format(new Date(selectedProgram.endDate + 'T00:00:00'), 'MMM d, yyyy')}`}
                     </p>
                   </div>
                 )}

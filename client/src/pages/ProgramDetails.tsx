@@ -264,7 +264,7 @@ export default function ProgramDetails() {
                       <Calendar className="w-3.5 h-3.5" /> Start Date
                     </div>
                     <div className="font-bold text-xl" data-testid="text-start-date">
-                      {format(new Date(program.startDate), 'MMM d, yyyy')}
+                      {format(new Date(program.startDate + 'T00:00:00'), 'MMM d, yyyy')}
                     </div>
                   </div>
                 )}
@@ -274,7 +274,7 @@ export default function ProgramDetails() {
                       <Calendar className="w-3.5 h-3.5" /> End Date
                     </div>
                     <div className="font-bold text-xl" data-testid="text-end-date">
-                      {format(new Date(program.endDate), 'MMM d, yyyy')}
+                      {format(new Date(program.endDate + 'T00:00:00'), 'MMM d, yyyy')}
                     </div>
                   </div>
                 )}

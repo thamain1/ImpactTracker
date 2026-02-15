@@ -506,7 +506,7 @@ export default function Dashboard() {
                     <p className="text-sm text-slate-500 mt-1 line-clamp-2">{prog.description || "No description"}</p>
                     {prog.startDate && (
                       <p className="text-xs text-muted-foreground mt-2">
-                        Started {format(new Date(prog.startDate), 'MMM yyyy')}
+                        Started {format(new Date(prog.startDate + 'T00:00:00'), 'MMM yyyy')}
                       </p>
                     )}
                     <div className="mt-3 flex items-center text-xs font-medium text-primary">
