@@ -23,7 +23,7 @@ export const userRoles = pgTable("user_roles", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
   orgId: integer("org_id").notNull().references(() => organizations.id),
-  role: text("role", { enum: ["admin", "staff"] }).notNull().default("staff"),
+  role: text("role", { enum: ["admin", "can_edit", "can_view", "can_view_download"] }).notNull().default("can_view"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

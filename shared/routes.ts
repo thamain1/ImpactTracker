@@ -97,10 +97,22 @@ export const api = {
       path: '/api/organizations/:orgId/roles' as const,
       input: z.object({
         email: z.string().email(),
-        role: z.enum(["admin", "staff"]),
+        role: z.enum(["admin", "can_edit", "can_view", "can_view_download"]),
       }),
       responses: {
         201: z.custom<typeof userRoles.$inferSelect>(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/organizations/:orgId/roles/:id' as const,
+      input: z.object({
+        role: z.enum(["admin", "can_edit", "can_view", "can_view_download"]),
+      }),
+      responses: {
+        200: z.custom<typeof userRoles.$inferSelect>(),
         400: errorSchemas.validation,
         404: errorSchemas.notFound,
       },

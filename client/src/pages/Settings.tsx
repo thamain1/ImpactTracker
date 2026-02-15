@@ -32,7 +32,7 @@ export default function Settings() {
   });
 
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("staff");
+  const [inviteRole, setInviteRole] = useState("can_view");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export default function Settings() {
     addRole.mutate({ email: inviteEmail, role: inviteRole }, {
       onSuccess: () => {
         setInviteEmail("");
-        setInviteRole("staff");
+        setInviteRole("can_view");
       },
     });
   };
@@ -195,12 +195,14 @@ export default function Settings() {
               data-testid="input-invite-email"
             />
             <Select value={inviteRole} onValueChange={setInviteRole}>
-              <SelectTrigger className="w-32" data-testid="select-invite-role">
+              <SelectTrigger className="w-48" data-testid="select-invite-role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="staff">Staff</SelectItem>
                 <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="can_edit">Can Edit</SelectItem>
+                <SelectItem value="can_view">Can View</SelectItem>
+                <SelectItem value="can_view_download">Can View & Download</SelectItem>
               </SelectContent>
             </Select>
             <Button onClick={handleInvite} disabled={addRole.isPending || !inviteEmail} data-testid="button-invite">
@@ -232,7 +234,9 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="text-xs">{role.role}</Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {{"admin": "Admin", "can_edit": "Can Edit", "can_view": "Can View", "can_view_download": "Can View & Download"}[role.role as string] || role.role}
+                    </Badge>
                     <Button
                       variant="ghost"
                       size="icon"

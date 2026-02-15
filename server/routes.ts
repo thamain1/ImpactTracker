@@ -79,8 +79,35 @@ export async function registerRoutes(
     }
   });
 
+  app.put(api.userRoles.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.userRoles.update.input.parse(req.body);
+      const orgId = Number(req.params.orgId);
+      const roleId = Number(req.params.id);
+      const roles = await storage.getUserRoles(orgId);
+      const targetRole = roles.find(r => r.id === roleId);
+      if (!targetRole) {
+        return res.status(404).json({ message: "Role not found in this organization" });
+      }
+      const updated = await storage.updateUserRole(roleId, input.role);
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
   app.delete(api.userRoles.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteUserRole(Number(req.params.id));
+    const orgId = Number(req.params.orgId);
+    const roleId = Number(req.params.id);
+    const roles = await storage.getUserRoles(orgId);
+    const targetRole = roles.find(r => r.id === roleId);
+    if (!targetRole) {
+      return res.status(404).json({ message: "Role not found in this organization" });
+    }
+    await storage.deleteUserRole(roleId);
     res.status(204).send();
   });
 

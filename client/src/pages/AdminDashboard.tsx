@@ -1,17 +1,52 @@
 import { useAdminStats } from "@/hooks/use-admin";
+import { useOrganizations } from "@/hooks/use-organizations";
+import { useUserRoles, useUpdateUserRole, useDeleteUserRole, useAddUserRole } from "@/hooks/use-user-roles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { Building2, FolderOpen, FileBarChart, Globe2 } from "lucide-react";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
-} from "recharts";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Building2, FolderOpen, FileBarChart, Users, Trash2, Shield } from "lucide-react";
 import { format } from "date-fns";
+import { useState } from "react";
 
-const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6"];
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  can_edit: "Can Edit",
+  can_view: "Can View",
+  can_view_download: "Can View & Download",
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  admin: "bg-primary/10 text-primary",
+  can_edit: "bg-amber-50 text-amber-700",
+  can_view: "bg-slate-100 text-slate-600",
+  can_view_download: "bg-blue-50 text-blue-700",
+};
 
 export default function AdminDashboard() {
   const { data: stats, isLoading } = useAdminStats();
+  const { data: orgs } = useOrganizations();
+  const orgId = orgs?.[0]?.id;
+
+  const { data: roles, isLoading: rolesLoading } = useUserRoles(orgId || 0);
+  const updateRole = useUpdateUserRole(orgId || 0);
+  const deleteRole = useDeleteUserRole(orgId || 0);
+  const addRole = useAddUserRole(orgId || 0);
+
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("can_view");
+
+  const handleInvite = () => {
+    if (!inviteEmail.trim() || !orgId) return;
+    addRole.mutate({ email: inviteEmail.trim(), role: inviteRole }, {
+      onSuccess: () => {
+        setInviteEmail("");
+        setInviteRole("can_view");
+      },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -27,16 +62,6 @@ export default function AdminDashboard() {
     );
   }
 
-  const geoChartData = stats?.byGeography?.map((g: any, i: number) => ({
-    name: g.geographyLevel,
-    entries: g.count,
-    ...g.totalMetrics,
-  })) || [];
-
-  const metricNames = stats?.byGeography?.length > 0
-    ? Object.keys(stats.byGeography[0].totalMetrics || {})
-    : [];
-
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
       <div>
@@ -44,7 +69,6 @@ export default function AdminDashboard() {
         <p className="text-muted-foreground mt-1">High-level overview across all organizations and programs.</p>
       </div>
 
-      {/* Summary Cards */}
       <div className="grid sm:grid-cols-3 gap-6">
         <Card className="bg-gradient-to-br from-primary to-emerald-600 text-white border-none">
           <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
@@ -78,43 +102,112 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* Geography Breakdown */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Globe2 className="w-5 h-5" /> Impact by Geography Level
+                <Users className="w-5 h-5" /> Manage Users & Permissions
               </CardTitle>
             </CardHeader>
-            <CardContent className="h-[350px]">
-              {geoChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={geoChartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                    <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip
-                      cursor={{ fill: '#f1f5f9' }}
-                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    />
-                    <Bar dataKey="entries" name="Reports Filed" radius={[4, 4, 0, 0]}>
-                      {geoChartData.map((_: any, index: number) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  No impact data recorded yet
+            <CardContent className="space-y-6">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Input
+                  placeholder="Enter email address"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className="flex-1"
+                  data-testid="input-invite-email"
+                />
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger className="w-48" data-testid="select-invite-role">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="can_edit">Can Edit</SelectItem>
+                    <SelectItem value="can_view">Can View</SelectItem>
+                    <SelectItem value="can_view_download">Can View & Download</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleInvite} disabled={addRole.isPending || !inviteEmail.trim() || !orgId} data-testid="button-add-user">
+                  {addRole.isPending ? "Adding..." : "Add User"}
+                </Button>
+              </div>
+
+              {rolesLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-14" />
+                  <Skeleton className="h-14" />
                 </div>
+              ) : roles && roles.length > 0 ? (
+                <div className="border rounded-md overflow-hidden">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-muted/50 border-b">
+                        <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-3">User</th>
+                        <th className="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-3">Permission</th>
+                        <th className="text-right text-xs font-medium text-muted-foreground uppercase tracking-wider p-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {roles.map((r: any) => (
+                        <tr key={r.id} className="border-b last:border-0" data-testid={`row-user-${r.id}`}>
+                          <td className="p-3">
+                            <div>
+                              <p className="font-medium text-sm text-slate-800">
+                                {r.user?.firstName || ""} {r.user?.lastName || ""}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{r.user?.email || "Unknown"}</p>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <Select
+                              value={r.role}
+                              onValueChange={(newRole) => updateRole.mutate({ roleId: r.id, role: newRole })}
+                            >
+                              <SelectTrigger className="w-44" data-testid={`select-role-${r.id}`}>
+                                <SelectValue>
+                                  <div className="flex items-center gap-2">
+                                    <Shield className="w-3.5 h-3.5" />
+                                    {ROLE_LABELS[r.role] || r.role}
+                                  </div>
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="can_edit">Can Edit</SelectItem>
+                                <SelectItem value="can_view">Can View</SelectItem>
+                                <SelectItem value="can_view_download">Can View & Download</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-3 text-right">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to remove this user?")) {
+                                  deleteRole.mutate(r.id);
+                                }
+                              }}
+                              data-testid={`button-delete-user-${r.id}`}
+                            >
+                              <Trash2 className="w-4 h-4 text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">No team members yet. Add users by email above.</p>
               )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Recent Programs */}
-        <div>
+        <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Recent Programs</CardTitle>
@@ -142,9 +235,8 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Aggregate Metric Totals */}
           {stats?.byGeography && stats.byGeography.length > 0 && (
-            <Card className="mt-6">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Statewide Metric Totals</CardTitle>
               </CardHeader>

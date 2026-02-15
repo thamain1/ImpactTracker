@@ -44,6 +44,35 @@ export function useAddUserRole(orgId: number) {
   });
 }
 
+export function useUpdateUserRole(orgId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ roleId, role }: { roleId: number; role: string }) => {
+      const url = buildUrl(api.userRoles.update.path, { orgId, id: roleId });
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update role");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/organizations/roles", orgId] });
+      toast({ title: "Success", description: "Permission updated successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
 export function useDeleteUserRole(orgId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();

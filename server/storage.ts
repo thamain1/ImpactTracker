@@ -19,6 +19,7 @@ export interface IStorage {
 
   getUserRoles(orgId: number): Promise<UserRoleWithUser[]>;
   createUserRole(orgId: number, userId: string, role: string): Promise<UserRole>;
+  updateUserRole(id: number, role: string): Promise<UserRole>;
   deleteUserRole(id: number): Promise<void>;
   findUserByEmail(email: string): Promise<any>;
 
@@ -108,8 +109,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUserRole(orgId: number, userId: string, role: string): Promise<UserRole> {
-    const [newRole] = await db.insert(userRoles).values({ orgId, userId, role: role as "admin" | "staff" }).returning();
+    const [newRole] = await db.insert(userRoles).values({ orgId, userId, role: role as any }).returning();
     return newRole;
+  }
+
+  async updateUserRole(id: number, role: string): Promise<UserRole> {
+    const [updated] = await db.update(userRoles).set({ role: role as any }).where(eq(userRoles.id, id)).returning();
+    return updated;
   }
 
   async deleteUserRole(id: number): Promise<void> {

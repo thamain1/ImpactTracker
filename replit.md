@@ -58,7 +58,7 @@ client/src/
 - `programs` - id, orgId, name, description, type, status (active/completed/draft), startDate, endDate, targetPopulation, goals, locations
 - `impact_metrics` - id, programId, name, unit
 - `impact_entries` - id, programId, userId, date, geographyLevel (SPA/City/County/State), geographyValue, zipCode, demographics, outcomes, metricValues (jsonb)
-- `user_roles` - id, userId, orgId, role (admin/staff)
+- `user_roles` - id, userId, orgId, role (admin/can_edit/can_view/can_view_download)
 - `users` - Replit Auth managed
 - `sessions` - Replit Auth managed
 
@@ -96,7 +96,7 @@ client/src/
 - Added organization profile fields (address, phone, website, email)
 - Impact entries now support ZIP codes, demographics, outcomes
 - Multi-step program creation wizard (4 steps: Basics, Details, Population & Goals, Metrics)
-- Admin dashboard with cross-org aggregate stats
+- Admin dashboard with cross-org aggregate stats, user/permission management (add/update/delete users with can_edit/can_view/can_view_download roles)
 - Settings page with org profile editing + team management
 - Programs page with grid/table view toggle, search, status filter, delete
 - Reports page with charts/raw data tabs and CSV export
