@@ -117,10 +117,6 @@ export default function ProgramDetails() {
             const match = program.goals.match(/(\d[\d,]*)/);
             if (match) metricGoal = match[1];
           }
-          if (!metricGoal && metric.unit) {
-            const unitMatch = metric.unit.match(/^(\d[\d,]*)$/);
-            if (unitMatch) metricGoal = unitMatch[1];
-          }
           return (
             <Card key={metric.id} className="border-slate-200 shadow-sm overflow-hidden relative">
               <div className="absolute top-0 right-0 p-3 opacity-10">
