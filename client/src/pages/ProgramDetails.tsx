@@ -9,24 +9,20 @@ import { Badge } from "@/components/ui/badge";
 import { useMemo, useState } from "react";
 import type { ImpactEntry } from "@shared/schema";
 import {
-  BarChart,
-  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Cell,
-  Legend
+  Area,
+  AreaChart
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, Pencil, Calendar } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { api } from "@shared/routes";
 import { useAuth } from "@/hooks/use-auth";
-
-const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6", "#ec4899"];
 
 export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
@@ -40,34 +36,17 @@ export default function ProgramDetails() {
 
   const primaryMetric = program?.metrics[0]?.name;
 
-  const GEO_LEVELS = ["SPA", "City", "County", "State"] as const;
-  const GEO_LEVEL_COLORS: Record<string, string> = {
-    SPA: "#8b5cf6",
-    City: "#3b82f6",
-    County: "#0d9488",
-    State: "#f97316",
-  };
-
-  const statsByLevel = useMemo(() => {
-    if (!stats || !primaryMetric) return {};
-    const grouped: Record<string, { name: string; value: number }[]> = {};
-    stats.forEach(stat => {
-      const level = stat.geographyLevel;
-      if (!grouped[level]) grouped[level] = [];
-      const existing = grouped[level].find(item => item.name === stat.geographyValue);
-      if (existing) {
-        existing.value += (stat.metrics[primaryMetric] || 0);
-      } else {
-        grouped[level].push({
-          name: stat.geographyValue,
-          value: stat.metrics[primaryMetric] || 0,
-        });
-      }
+  const participantsByMonth = useMemo(() => {
+    if (!entries || !primaryMetric) return [];
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthCounts: Record<number, number> = {};
+    entries.forEach(entry => {
+      const month = new Date(entry.date).getMonth();
+      const mv = entry.metricValues as Record<string, number>;
+      monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
     });
-    return grouped;
-  }, [stats, primaryMetric]);
-
-  const activeLevels = GEO_LEVELS.filter(level => statsByLevel[level]?.length);
+    return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
+  }, [entries, primaryMetric]);
 
   if (progLoading || statsLoading) {
     return (
@@ -155,45 +134,35 @@ export default function ProgramDetails() {
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Chart Section */}
         <div className="lg:col-span-2 space-y-6">
-          {activeLevels.length > 0 ? (
-            activeLevels.map(level => {
-              const levelData = statsByLevel[level] || [];
-              const color = GEO_LEVEL_COLORS[level] || COLORS[0];
-              return (
-                <Card key={level} className="border-slate-200 shadow-sm" data-testid={`chart-${level.toLowerCase()}`}>
-                  <CardHeader>
-                    <CardTitle className="font-heading text-lg flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: color }} />
-                      {level} Impact ({primaryMetric})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="h-[280px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={levelData} margin={{ top: 10, right: 30, left: 20, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip
-                          cursor={{ fill: '#f1f5f9' }}
-                          contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                        />
-                        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                </Card>
-              );
-            })
-          ) : (
-            <Card className="border-slate-200 shadow-sm">
-              <CardHeader>
-                <CardTitle className="font-heading text-lg">Impact by Geography ({primaryMetric})</CardTitle>
-              </CardHeader>
-              <CardContent className="h-[280px] flex items-center justify-center text-slate-400">
-                No data to visualize yet
-              </CardContent>
-            </Card>
-          )}
+          {/* 12-Month Participation Chart */}
+          <Card className="border-slate-200 shadow-sm" data-testid="chart-participants-by-month">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg">Participants by Month</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              {participantsByMonth.some(m => m.count > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={participantsByMonth} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorParticipants" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    <Area type="monotone" dataKey="count" name={primaryMetric} stroke="#0d9488" strokeWidth={2} fillOpacity={1} fill="url(#colorParticipants)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-slate-400">
+                  No monthly data available yet
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Recent Entries Table */}
           <Card className="border-slate-200 shadow-sm">
