@@ -1,15 +1,13 @@
 import { useAdminStats } from "@/hooks/use-admin";
 import { useOrganizations } from "@/hooks/use-organizations";
-import { useUserRoles, useUpdateUserRole, useDeleteUserRole, useAddUserRole } from "@/hooks/use-user-roles";
+import { useUserRoles, useUpdateUserRole, useDeleteUserRole } from "@/hooks/use-user-roles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Building2, FolderOpen, FileBarChart, Users, Trash2, Shield } from "lucide-react";
 import { format } from "date-fns";
-import { useState } from "react";
 
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
@@ -33,20 +31,6 @@ export default function AdminDashboard() {
   const { data: roles, isLoading: rolesLoading } = useUserRoles(orgId || 0);
   const updateRole = useUpdateUserRole(orgId || 0);
   const deleteRole = useDeleteUserRole(orgId || 0);
-  const addRole = useAddUserRole(orgId || 0);
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("can_view");
-
-  const handleInvite = () => {
-    if (!inviteEmail.trim() || !orgId) return;
-    addRole.mutate({ email: inviteEmail.trim(), role: inviteRole }, {
-      onSuccess: () => {
-        setInviteEmail("");
-        setInviteRole("can_view");
-      },
-    });
-  };
 
   if (isLoading) {
     return (
@@ -110,30 +94,6 @@ export default function AdminDashboard() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <Input
-                  placeholder="Enter email address"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className="flex-1"
-                  data-testid="input-invite-email"
-                />
-                <Select value={inviteRole} onValueChange={setInviteRole}>
-                  <SelectTrigger className="w-48" data-testid="select-invite-role">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="admin">Admin</SelectItem>
-                    <SelectItem value="can_edit">Can Edit</SelectItem>
-                    <SelectItem value="can_view">Can View</SelectItem>
-                    <SelectItem value="can_view_download">Can View & Download</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Button onClick={handleInvite} disabled={addRole.isPending || !inviteEmail.trim() || !orgId} data-testid="button-add-user">
-                  {addRole.isPending ? "Adding..." : "Add User"}
-                </Button>
-              </div>
-
               {rolesLoading ? (
                 <div className="space-y-3">
                   <Skeleton className="h-14" />
