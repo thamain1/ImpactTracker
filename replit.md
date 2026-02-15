@@ -54,7 +54,7 @@ client/src/
 7. **Settings** - Organization profile editing, team member management (add by email, assign roles)
 
 ## Database Schema
-- `organizations` - id, name, slug, address, phone, website, contactEmail
+- `organizations` - id, name, slug, address, phone, website, contactEmail, mission, vision
 - `programs` - id, orgId, name, description, type, status (active/completed/draft), startDate, endDate, targetPopulation, goals, locations
 - `impact_metrics` - id, programId, name, unit
 - `impact_entries` - id, programId, userId, date, geographyLevel (SPA/City/County/State), geographyValue, zipCode, demographics, outcomes, metricValues (jsonb)

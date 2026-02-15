@@ -16,6 +16,8 @@ export const organizations = pgTable("organizations", {
   phone: text("phone"),
   website: text("website"),
   contactEmail: text("contact_email"),
+  mission: text("mission"),
+  vision: text("vision"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

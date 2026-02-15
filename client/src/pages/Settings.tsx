@@ -4,13 +4,14 @@ import { useUserRoles, useAddUserRole, useDeleteUserRole } from "@/hooks/use-use
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, UserPlus, Building2, Save } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye } from "lucide-react";
 import { api, buildUrl } from "@shared/routes";
 
 export default function Settings() {
@@ -29,6 +30,8 @@ export default function Settings() {
     phone: "",
     website: "",
     contactEmail: "",
+    mission: "",
+    vision: "",
   });
 
   const [inviteEmail, setInviteEmail] = useState("");
@@ -43,6 +46,8 @@ export default function Settings() {
         phone: (org as any).phone || "",
         website: (org as any).website || "",
         contactEmail: (org as any).contactEmail || "",
+        mission: (org as any).mission || "",
+        vision: (org as any).vision || "",
       });
     }
   }, [org]);
@@ -171,6 +176,50 @@ export default function Settings() {
             <Button onClick={saveOrgProfile} disabled={saving} data-testid="button-save-org">
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Save Profile
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Mission & Vision */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5" />
+            Mission & Vision
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="org-mission" className="flex items-center gap-1.5 mb-1.5">
+              <Target className="w-3.5 h-3.5 text-muted-foreground" /> Mission Statement
+            </Label>
+            <Textarea
+              id="org-mission"
+              value={orgForm.mission}
+              onChange={e => setOrgForm(f => ({ ...f, mission: e.target.value }))}
+              placeholder="Describe your organization's mission and purpose..."
+              rows={3}
+              data-testid="input-org-mission"
+            />
+          </div>
+          <div>
+            <Label htmlFor="org-vision" className="flex items-center gap-1.5 mb-1.5">
+              <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Vision Statement
+            </Label>
+            <Textarea
+              id="org-vision"
+              value={orgForm.vision}
+              onChange={e => setOrgForm(f => ({ ...f, vision: e.target.value }))}
+              placeholder="Describe your organization's long-term vision..."
+              rows={3}
+              data-testid="input-org-vision"
+            />
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button onClick={saveOrgProfile} disabled={saving} data-testid="button-save-mission">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Save
             </Button>
           </div>
         </CardContent>
