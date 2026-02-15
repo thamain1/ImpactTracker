@@ -8,10 +8,12 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileBarChart, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList } from "lucide-react";
+import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { api } from "@shared/routes";
+import { generateImpactStudyPdf } from "@/lib/generateImpactStudyPdf";
+import { useToast } from "@/hooks/use-toast";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -45,6 +47,7 @@ function useGeocode(locations: string[]) {
 }
 
 export default function Reports() {
+  const { toast } = useToast();
   const { data: orgs } = useOrganizations();
   const orgId = orgs?.[0]?.id;
   const { data: programs } = usePrograms(orgId);
@@ -145,6 +148,23 @@ export default function Reports() {
     window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank");
   };
 
+  const pdfReady = !!(selectedProgram && orgs?.[0] && stats && entries && !statsLoading);
+
+  const handlePdfDownload = () => {
+    if (!selectedProgram || !orgs?.[0] || !stats || !entries) {
+      toast({ title: "Not Ready", description: "Please wait for data to finish loading before downloading.", variant: "destructive" });
+      return;
+    }
+    generateImpactStudyPdf({
+      program: selectedProgram,
+      org: orgs[0] as any,
+      stats: stats || [],
+      censusData: (censusData || []) as any,
+      ageGroupData: (ageGroupData || []) as any,
+      entries: (entries || []) as any,
+    });
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6 pb-20">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -164,10 +184,16 @@ export default function Reports() {
             </SelectContent>
           </Select>
           {selectedProgramId && (
-            <Button variant="outline" onClick={handleCsvDownload} data-testid="button-download-csv">
-              <Download className="w-4 h-4 mr-2" />
-              Export CSV
-            </Button>
+            <>
+              <Button variant="outline" onClick={handlePdfDownload} disabled={!pdfReady} data-testid="button-download-pdf">
+                <FileText className="w-4 h-4 mr-2" />
+                Impact Study PDF
+              </Button>
+              <Button variant="outline" onClick={handleCsvDownload} data-testid="button-download-csv">
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+            </>
           )}
         </div>
       </div>
