@@ -62,6 +62,15 @@ interface ImpactEntry {
   outcomes?: string | null;
 }
 
+interface AiNarrative {
+  executiveSummary?: string;
+  communityNeed?: string;
+  programDesign?: string;
+  outcomesImpact?: string;
+  lessonsLearned?: string;
+  callToAction?: string;
+}
+
 interface ReportData {
   program: ProgramData;
   org: OrgData;
@@ -69,6 +78,7 @@ interface ReportData {
   censusData: CensusEntry[];
   ageGroupData: AgeGroupEntry[];
   entries: ImpactEntry[];
+  aiNarrative?: AiNarrative | null;
 }
 
 const COLORS = {
@@ -104,7 +114,7 @@ function formatPercent(n: number): string {
 }
 
 export function generateImpactStudyPdf(data: ReportData) {
-  const { program, org, stats, censusData, ageGroupData, entries } = data;
+  const { program, org, stats, censusData, ageGroupData, entries, aiNarrative } = data;
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "letter" });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -273,31 +283,35 @@ export function generateImpactStudyPdf(data: ReportData) {
 
   drawSectionHeader("Executive Summary");
 
-  const geographyNames = stats.map(s => s.geographyValue).filter((v, i, a) => a.indexOf(v) === i);
-  const geoListStr = geographyNames.length > 0 ? geographyNames.join(", ") : (program.locations || "the service area");
+  if (aiNarrative?.executiveSummary) {
+    drawParagraph(aiNarrative.executiveSummary);
+  } else {
+    const geographyNames = stats.map(s => s.geographyValue).filter((v, i, a) => a.indexOf(v) === i);
+    const geoListStr = geographyNames.length > 0 ? geographyNames.join(", ") : (program.locations || "the service area");
 
-  let summaryText = `${org.name} delivered the ${program.name} program`;
-  if (program.type) summaryText += ` (${program.type})`;
-  summaryText += `, serving ${formatNumber(totalPrimary)} ${primaryMetric.toLowerCase()} across ${geoListStr}.`;
+    let summaryText = `${org.name} delivered the ${program.name} program`;
+    if (program.type) summaryText += ` (${program.type})`;
+    summaryText += `, serving ${formatNumber(totalPrimary)} ${primaryMetric.toLowerCase()} across ${geoListStr}.`;
 
-  Object.entries(secondaryMetrics).forEach(([name, val]) => {
-    if (val > 0) summaryText += ` The program also distributed ${formatNumber(val)} ${name.toLowerCase()}.`;
-  });
+    Object.entries(secondaryMetrics).forEach(([name, val]) => {
+      if (val > 0) summaryText += ` The program also distributed ${formatNumber(val)} ${name.toLowerCase()}.`;
+    });
 
-  if (goalTarget) {
-    const pctGoal = ((totalPrimary / goalTarget) * 100).toFixed(1);
-    summaryText += ` This represents ${pctGoal}% of the program goal of ${formatNumber(goalTarget)} ${primaryMetric.toLowerCase()}.`;
-  }
-
-  if (censusData.length > 0) {
-    const directGeos = censusData.filter(c => stats.some(s => s.geographyLevel === c.geographyLevel && s.geographyValue === c.geographyValue));
-    const highPoverty = directGeos.filter(c => c.povertyRate && c.povertyRate > 15);
-    if (highPoverty.length > 0) {
-      summaryText += ` The program operates in areas with significant economic need, where poverty rates range from ${highPoverty.map(h => (h.povertyRate || 0).toFixed(1) + "%").join(" to ")}.`;
+    if (goalTarget) {
+      const pctGoal = ((totalPrimary / goalTarget) * 100).toFixed(1);
+      summaryText += ` This represents ${pctGoal}% of the program goal of ${formatNumber(goalTarget)} ${primaryMetric.toLowerCase()}.`;
     }
-  }
 
-  drawParagraph(summaryText);
+    if (censusData.length > 0) {
+      const directGeos = censusData.filter(c => stats.some(s => s.geographyLevel === c.geographyLevel && s.geographyValue === c.geographyValue));
+      const highPoverty = directGeos.filter(c => c.povertyRate && c.povertyRate > 15);
+      if (highPoverty.length > 0) {
+        summaryText += ` The program operates in areas with significant economic need, where poverty rates range from ${highPoverty.map(h => (h.povertyRate || 0).toFixed(1) + "%").join(" to ")}.`;
+      }
+    }
+
+    drawParagraph(summaryText);
+  }
 
   // About Organization
   drawSectionHeader(`About ${org.name}`);
@@ -332,7 +346,9 @@ export function generateImpactStudyPdf(data: ReportData) {
   // =========== PROGRAM CONTEXT AND COMMUNITY NEED ===========
   drawSectionHeader("Program Context and Community Need");
 
-  if (program.description) {
+  if (aiNarrative?.communityNeed) {
+    drawParagraph(aiNarrative.communityNeed);
+  } else if (program.description) {
     drawParagraph(program.description);
   }
 
@@ -345,6 +361,12 @@ export function generateImpactStudyPdf(data: ReportData) {
         : program.targetAgeMin != null ? `Ages ${program.targetAgeMin}+` : `Ages up to ${program.targetAgeMax}`;
       drawParagraph(`Age Focus: ${ageRange}`);
     }
+  }
+
+  // Program Design (AI section)
+  if (aiNarrative?.programDesign) {
+    drawSubHeader("Program Design");
+    drawParagraph(aiNarrative.programDesign);
   }
 
   if (program.goals) {
@@ -579,6 +601,12 @@ export function generateImpactStudyPdf(data: ReportData) {
     }
   }
 
+  // =========== OUTCOMES AND IMPACT (AI) ===========
+  if (aiNarrative?.outcomesImpact) {
+    drawSectionHeader("Outcomes and Community Impact");
+    drawParagraph(aiNarrative.outcomesImpact);
+  }
+
   // =========== OUTCOMES AND DEMOGRAPHICS ===========
   const outcomeEntries = entries.filter(e => e.outcomes && e.outcomes.trim());
   const demographicEntries = entries.filter(e => e.demographics && e.demographics.trim());
@@ -686,6 +714,18 @@ export function generateImpactStudyPdf(data: ReportData) {
       y += 6;
       doc.setTextColor(...COLORS.dark);
     }
+  }
+
+  // =========== LESSONS LEARNED (AI) ===========
+  if (aiNarrative?.lessonsLearned) {
+    drawSectionHeader("Lessons Learned and Future Plans");
+    drawParagraph(aiNarrative.lessonsLearned);
+  }
+
+  // =========== CALL TO ACTION (AI) ===========
+  if (aiNarrative?.callToAction) {
+    drawSectionHeader("Call to Action");
+    drawParagraph(aiNarrative.callToAction);
   }
 
   // =========== CONTACT / FOOTER ===========

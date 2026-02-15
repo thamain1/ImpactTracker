@@ -6,6 +6,7 @@ import { z } from "zod";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from "./services/census";
 import { expandGeographies, getParentGeographies } from "./services/geography";
+import OpenAI from "openai";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -510,6 +511,81 @@ export async function registerRoutes(
   app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
     const stats = await storage.getAdminStats();
     res.json(stats);
+  });
+
+  // === AI Report Generation ===
+  app.post("/api/report/ai-narrative", isAuthenticated, async (req, res) => {
+    try {
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(400).json({ message: "OpenAI API key not configured" });
+      }
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      const body = req.body;
+      const programName = body.programName || body.program?.name || "";
+      const programDescription = body.programDescription || body.program?.description || "";
+      const programType = body.programType || body.program?.type || "General";
+      const orgName = body.orgName || body.org?.name || "";
+      const orgMission = body.orgMission || body.org?.mission || "";
+      const orgVision = body.orgVision || body.org?.vision || "";
+      const targetPopulation = body.targetPopulation || body.program?.targetPopulation || "";
+      const goals = body.goals || body.program?.goals || "";
+      const totalParticipants = body.totalParticipants || body.totalPrimary || 0;
+      const primaryMetricName = body.primaryMetricName || body.program?.metrics?.[0]?.name || "Participants";
+      const geographies = body.geographies || (body.stats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).join(", ");
+      const totalCost = body.totalCost || body.program?.totalCost || 0;
+      const costPerParticipant = body.program?.costPerParticipant || (totalParticipants > 0 && totalCost > 0 ? (totalCost / totalParticipants).toFixed(2) : null);
+
+      const prompt = `You are an expert nonprofit impact report writer. Generate narrative content for an Impact Study Report for a nonprofit program. Use a professional, compelling, data-driven tone similar to published nonprofit impact studies. Do NOT use any emojis.
+
+PROGRAM INFORMATION:
+- Organization: ${orgName}
+- Program Name: ${programName}
+- Program Type: ${programType}
+- Description: ${programDescription || "Not provided"}
+- Target Population: ${targetPopulation || "General community"}
+- Goals: ${goals || "Not specified"}
+
+IMPACT DATA:
+- Primary Metric (${primaryMetricName}): ${totalParticipants}
+- Geographies Served: ${geographies || "Not specified"}
+- Total Cost: ${totalCost ? "$" + Number(totalCost).toLocaleString() : "Not tracked"}
+- Cost Per Participant: ${costPerParticipant ? "$" + costPerParticipant : "Not tracked"}
+
+${orgMission ? `ORGANIZATION MISSION: ${orgMission}` : ""}
+${orgVision ? `ORGANIZATION VISION: ${orgVision}` : ""}
+
+Generate a JSON response with these sections (each should be 2-4 paragraphs of rich, professional narrative text). Reference specific data points from above. Do not invent data - only reference what was provided:
+
+{
+  "executiveSummary": "A compelling executive summary highlighting key achievements, scope, and significance of the program",
+  "communityNeed": "Analysis of the community need this program addresses based on the target population and program context",
+  "programDesign": "Description of the program design, approach, and methodology",
+  "outcomesImpact": "Discussion of outcomes and community impact, both immediate and longer-term contributions",
+  "lessonsLearned": "Key lessons learned, what worked well, challenges faced, and future opportunities",
+  "callToAction": "A compelling call to action for donors, partners, and community members with specific giving levels based on the cost per participant data"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 4096,
+      });
+
+      const content = response.choices[0].message.content;
+      if (!content) {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      const narrative = JSON.parse(content);
+      res.json(narrative);
+    } catch (error: any) {
+      console.error("AI report generation error:", error.message);
+      res.status(500).json({ message: "Failed to generate AI narrative: " + error.message });
+    }
   });
 
   // Seed

@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList } from "lucide-react";
+import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { api } from "@shared/routes";
@@ -149,20 +149,63 @@ export default function Reports() {
   };
 
   const pdfReady = !!(selectedProgram && orgs?.[0] && stats && entries && !statsLoading);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
 
-  const handlePdfDownload = () => {
+  const handlePdfDownload = async () => {
     if (!selectedProgram || !orgs?.[0] || !stats || !entries) {
       toast({ title: "Not Ready", description: "Please wait for data to finish loading before downloading.", variant: "destructive" });
       return;
     }
-    generateImpactStudyPdf({
-      program: selectedProgram,
-      org: orgs[0] as any,
-      stats: stats || [],
-      censusData: (censusData || []) as any,
-      ageGroupData: (ageGroupData || []) as any,
-      entries: (entries || []) as any,
-    });
+    setPdfGenerating(true);
+    let aiNarrative = undefined;
+    try {
+      const primaryMetric = selectedProgram.metrics?.[0];
+      const totalPrimary = (entries || []).reduce((sum: number, e: any) => {
+        const vals = e.metricValues as Record<string, number> | null;
+        if (vals && primaryMetric) return sum + (vals[primaryMetric.name] || 0);
+        return sum;
+      }, 0);
+      const geoSummary = (stats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
+      const res = await fetch("/api/report/ai-narrative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          programName: selectedProgram.name,
+          programDescription: selectedProgram.description || "",
+          programType: selectedProgram.type || "",
+          orgName: orgs[0].name,
+          orgMission: (orgs[0] as any).mission || "",
+          targetPopulation: selectedProgram.targetPopulation || "",
+          goals: selectedProgram.goals || "",
+          totalParticipants: totalPrimary,
+          primaryMetricName: primaryMetric?.name || "Participants",
+          geographies: geoSummary,
+          totalCost: selectedProgram.totalCost || 0,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        aiNarrative = data;
+      }
+    } catch (err) {
+      console.warn("AI narrative generation failed, proceeding without AI content", err);
+    }
+    try {
+      generateImpactStudyPdf({
+        program: selectedProgram,
+        org: orgs[0] as any,
+        stats: stats || [],
+        censusData: (censusData || []) as any,
+        ageGroupData: (ageGroupData || []) as any,
+        entries: (entries || []) as any,
+        aiNarrative,
+      });
+      toast({ title: "PDF Generated", description: aiNarrative ? "Impact Study PDF with AI narrative has been downloaded." : "Impact Study PDF has been downloaded." });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to generate PDF.", variant: "destructive" });
+    }
+    setPdfGenerating(false);
   };
 
   return (
@@ -185,9 +228,9 @@ export default function Reports() {
           </Select>
           {selectedProgramId && (
             <>
-              <Button variant="outline" onClick={handlePdfDownload} disabled={!pdfReady} data-testid="button-download-pdf">
-                <FileText className="w-4 h-4 mr-2" />
-                Impact Study PDF
+              <Button variant="outline" onClick={handlePdfDownload} disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
+                {pdfGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+                {pdfGenerating ? "Generating AI Report..." : "Impact Study PDF"}
               </Button>
               <Button variant="outline" onClick={handleCsvDownload} data-testid="button-download-csv">
                 <Download className="w-4 h-4 mr-2" />
