@@ -283,9 +283,14 @@ export async function registerRoutes(
 
       let allEntries = await storage.getAllImpactEntries();
 
+      const allPrograms = await storage.getPrograms();
+      const primaryMetricByProgram: Record<number, string | null> = {};
+      allPrograms.forEach(p => {
+        primaryMetricByProgram[p.id] = p.metrics.length > 0 ? p.metrics[0].name : null;
+      });
+
       if (orgId) {
-        const orgPrograms = await storage.getPrograms(orgId);
-        const orgProgramIds = new Set(orgPrograms.map(p => p.id));
+        const orgProgramIds = new Set(allPrograms.filter(p => p.orgId === orgId).map(p => p.id));
         allEntries = allEntries.filter(e => orgProgramIds.has(e.programId));
       }
 
@@ -307,7 +312,10 @@ export async function registerRoutes(
         if (!entry.geographyValue) return;
         const key = `${entry.geographyLevel}:${entry.geographyValue}`;
         const mv = entry.metricValues as Record<string, number>;
-        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        const primaryMetric = primaryMetricByProgram[entry.programId];
+        const total = primaryMetric && mv[primaryMetric] != null
+          ? Number(mv[primaryMetric])
+          : 0;
         impactCounts[key] = (impactCounts[key] || 0) + total;
 
         const parents = getParentGeographies(entry.geographyLevel, entry.geographyValue);
@@ -435,9 +443,10 @@ export async function registerRoutes(
 
       const goalVsActual = orgPrograms.map(prog => {
         const progEntries = ytdEntries.filter(e => e.programId === prog.id);
+        const primaryMetricName = prog.metrics.length > 0 ? prog.metrics[0].name : null;
         const actual = progEntries.reduce((sum, entry) => {
           const mv = entry.metricValues as Record<string, number>;
-          return sum + Object.values(mv).reduce((s, v) => s + Number(v), 0);
+          return sum + (primaryMetricName ? Number(mv[primaryMetricName] || 0) : 0);
         }, 0);
 
         let goalTarget: number | null = null;

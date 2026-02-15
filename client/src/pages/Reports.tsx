@@ -523,8 +523,8 @@ export default function Reports() {
                   const matchingStat = stats?.find(
                     s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
                   );
-                  const impactTotal = matchingStat
-                    ? Object.values(matchingStat.metrics).reduce((sum, v) => sum + v, 0)
+                  const impactTotal = matchingStat && primaryMetric
+                    ? (matchingStat.metrics[primaryMetric] || 0)
                     : 0;
                   const reachPercent = census.totalPopulation && impactTotal > 0
                     ? Math.round((impactTotal / census.totalPopulation) * 10000) / 100
@@ -617,8 +617,8 @@ export default function Reports() {
                   const matchingStat = stats?.find(
                     s => s.geographyLevel === geo.geographyLevel && s.geographyValue === geo.geographyValue
                   );
-                  const impactTotal = matchingStat
-                    ? Object.values(matchingStat.metrics).reduce((sum, v) => sum + v, 0)
+                  const impactTotal = matchingStat && primaryMetric
+                    ? (matchingStat.metrics[primaryMetric] || 0)
                     : 0;
                   const targetPop = geo.targetAgePopulation;
                   const ageReachPercent = targetPop && impactTotal > 0
