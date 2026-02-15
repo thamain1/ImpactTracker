@@ -20,10 +20,11 @@ import {
   Legend
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, Pencil } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil, Calendar } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { api } from "@shared/routes";
+import { useAuth } from "@/hooks/use-auth";
 
 const COLORS = ["#0d9488", "#f97316", "#3b82f6", "#8b5cf6", "#ec4899"];
 
@@ -32,6 +33,7 @@ export default function ProgramDetails() {
   const programId = parseInt(params?.id || "0");
   const [editingEntry, setEditingEntry] = useState<ImpactEntry | null>(null);
 
+  const { user } = useAuth();
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: entries, isLoading: entriesLoading } = useImpactEntries(programId);
@@ -268,14 +270,36 @@ export default function ProgramDetails() {
               <div className="space-y-4">
                 <div>
                   <div className="text-sm opacity-80 mb-1">Last Updated</div>
-                  <div className="font-bold text-xl">
+                  <div className="font-bold text-xl" data-testid="text-last-updated">
                     {entries?.[0] ? format(new Date(entries[0].createdAt!), 'MMM d, yyyy') : 'Never'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-sm opacity-80 mb-1">Total Reports</div>
-                  <div className="font-bold text-xl">{entries?.length || 0}</div>
+                  <div className="text-sm opacity-80 mb-1">Updated By</div>
+                  <div className="font-bold text-xl" data-testid="text-updated-by">
+                    {user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown' : 'Unknown'}
+                  </div>
                 </div>
+                {program.startDate && (
+                  <div>
+                    <div className="text-sm opacity-80 mb-1 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" /> Start Date
+                    </div>
+                    <div className="font-bold text-xl" data-testid="text-start-date">
+                      {format(new Date(program.startDate), 'MMM d, yyyy')}
+                    </div>
+                  </div>
+                )}
+                {program.endDate && (
+                  <div>
+                    <div className="text-sm opacity-80 mb-1 flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5" /> End Date
+                    </div>
+                    <div className="font-bold text-xl" data-testid="text-end-date">
+                      {format(new Date(program.endDate), 'MMM d, yyyy')}
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
