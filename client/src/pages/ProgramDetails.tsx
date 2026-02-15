@@ -111,24 +111,37 @@ export default function ProgramDetails() {
 
       {/* KPI Cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {program.metrics.map((metric, i) => (
-          <Card key={metric.id} className="border-slate-200 shadow-sm overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-3 opacity-10">
-              <BarChart className="w-16 h-16 text-primary" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">
-                Total {metric.name}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-heading text-slate-900">
-                {(totalMetrics[metric.name] || 0).toLocaleString()}
+        {program.metrics.map((metric, i) => {
+          let metricGoal: string | null = null;
+          if (i === 0 && program.goals) {
+            const match = program.goals.match(/(\d[\d,]*)/);
+            if (match) metricGoal = match[1];
+          }
+          if (!metricGoal && metric.unit) {
+            const unitMatch = metric.unit.match(/^(\d[\d,]*)$/);
+            if (unitMatch) metricGoal = unitMatch[1];
+          }
+          return (
+            <Card key={metric.id} className="border-slate-200 shadow-sm overflow-hidden relative">
+              <div className="absolute top-0 right-0 p-3 opacity-10">
+                <BarChart className="w-16 h-16 text-primary" />
               </div>
-              <div className="text-sm text-slate-400 mt-1 font-medium">{metric.unit}</div>
-            </CardContent>
-          </Card>
-        ))}
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+                  Total {metric.name}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-heading text-slate-900">
+                  {(totalMetrics[metric.name] || 0).toLocaleString()}
+                </div>
+                <div className="text-sm text-slate-400 mt-1 font-medium" data-testid={`text-metric-goal-${metric.id}`}>
+                  {metricGoal ? `Goal: ${metricGoal}` : metric.unit}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8">
