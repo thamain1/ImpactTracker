@@ -142,14 +142,19 @@ export default function Reports() {
     if (selectedProgram?.locations) {
       selectedProgram.locations.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).forEach(l => locs.push(l));
     }
-    filteredStats?.forEach(s => {
-      const label = `${s.geographyValue}, ${s.geographyLevel === "State" ? "USA" : "California"}`;
-      if (!locs.includes(label) && !locs.includes(s.geographyValue)) {
-        locs.push(label);
-      }
-    });
+    if (entries && entries.length > 0) {
+      const directLocations = new Set<string>();
+      entries.forEach(e => {
+        directLocations.add(`${e.geographyValue}, ${e.geographyLevel === "State" ? "USA" : "California"}`);
+      });
+      directLocations.forEach(label => {
+        if (!locs.some(l => label.includes(l) || l.includes(label.split(",")[0].trim()))) {
+          locs.push(label);
+        }
+      });
+    }
     return locs;
-  }, [selectedProgram, filteredStats]);
+  }, [selectedProgram, entries]);
 
   const geoCoords = useGeocode(serviceAreaLocations);
 
