@@ -21,6 +21,7 @@ import { format } from "date-fns";
 import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@shared/routes";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -28,11 +29,32 @@ export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
   const programId = parseInt(params?.id || "0");
   const [editingEntry, setEditingEntry] = useState<ImpactEntry | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string>("all");
 
   const { user } = useAuth();
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
-  const { data: entries, isLoading: entriesLoading } = useImpactEntries(programId);
+  const { data: allEntries, isLoading: entriesLoading } = useImpactEntries(programId);
+
+  const availableYears = useMemo(() => {
+    if (!allEntries) return [];
+    const years = new Set<number>();
+    allEntries.forEach(entry => {
+      const year = new Date(entry.date + "T00:00:00").getFullYear();
+      years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [allEntries]);
+
+  const entries = useMemo(() => {
+    if (!allEntries) return allEntries;
+    if (selectedYear === "all") return allEntries;
+    const yr = parseInt(selectedYear);
+    return allEntries.filter(entry => {
+      const entryYear = new Date(entry.date + "T00:00:00").getFullYear();
+      return entryYear === yr;
+    });
+  }, [allEntries, selectedYear]);
 
   const primaryMetric = program?.metrics[0]?.name;
 
@@ -41,7 +63,7 @@ export default function ProgramDetails() {
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
     entries.forEach(entry => {
-      const month = new Date(entry.date).getMonth();
+      const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
       monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
     });
@@ -89,7 +111,21 @@ export default function ProgramDetails() {
             <h1 className="text-4xl font-heading font-bold text-slate-900 mb-2">{program.name}</h1>
             <p className="text-lg text-slate-600 max-w-3xl">{program.description}</p>
           </div>
-          <div className="flex gap-3 flex-wrap">
+          <div className="flex gap-3 flex-wrap items-center">
+            {availableYears.length > 0 && (
+              <Select value={selectedYear} onValueChange={setSelectedYear}>
+                <SelectTrigger className="w-[140px]" data-testid="select-year-filter">
+                  <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Year" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {availableYears.map(y => (
+                    <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             <Link href={`/programs/${programId}/edit`}>
               <Button variant="outline" data-testid="button-edit-program">
                 <Pencil className="w-4 h-4 mr-2" />

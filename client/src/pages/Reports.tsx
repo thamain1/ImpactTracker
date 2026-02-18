@@ -54,6 +54,7 @@ export default function Reports() {
   
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"charts" | "data">("charts");
+  const [selectedYear, setSelectedYear] = useState<string>("all");
   
   useEffect(() => {
     if (programs && programs.length > 0 && !selectedProgramId) {
@@ -63,17 +64,54 @@ export default function Reports() {
 
   const programId = parseInt(selectedProgramId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
-  const { data: entries } = useImpactEntries(programId);
+  const { data: allEntries } = useImpactEntries(programId);
   const selectedProgram = programs?.find(p => p.id === programId);
+
+  const availableYears = useMemo(() => {
+    if (!allEntries) return [];
+    const years = new Set<number>();
+    allEntries.forEach(entry => {
+      const year = new Date(entry.date + "T00:00:00").getFullYear();
+      years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [allEntries]);
+
+  const entries = useMemo(() => {
+    if (!allEntries) return allEntries;
+    if (selectedYear === "all") return allEntries;
+    const yr = parseInt(selectedYear);
+    return allEntries.filter(entry => {
+      const entryYear = new Date(entry.date + "T00:00:00").getFullYear();
+      return entryYear === yr;
+    });
+  }, [allEntries, selectedYear]);
+
+  const filteredStats = useMemo(() => {
+    if (selectedYear === "all") return stats;
+    if (!entries || entries.length === 0) return [];
+    const aggregation: Record<string, { geographyLevel: string; geographyValue: string; metrics: Record<string, number> }> = {};
+    entries.forEach(entry => {
+      const key = `${entry.geographyLevel}:${entry.geographyValue}`;
+      if (!aggregation[key]) {
+        aggregation[key] = { geographyLevel: entry.geographyLevel, geographyValue: entry.geographyValue, metrics: {} };
+      }
+      const mv = entry.metricValues as Record<string, number>;
+      Object.entries(mv).forEach(([metric, val]) => {
+        aggregation[key].metrics[metric] = (aggregation[key].metrics[metric] || 0) + Number(val);
+      });
+    });
+    return Object.values(aggregation);
+  }, [stats, entries, selectedYear]);
 
   const primaryMetric = selectedProgram?.metrics[0]?.name || "";
 
   const geoList = useMemo(() => {
-    if (!stats) return [];
+    if (!filteredStats) return [];
     const unique = new Map<string, { level: string; value: string }>();
-    stats.forEach(s => unique.set(`${s.geographyLevel}:${s.geographyValue}`, { level: s.geographyLevel, value: s.geographyValue }));
+    filteredStats.forEach(s => unique.set(`${s.geographyLevel}:${s.geographyValue}`, { level: s.geographyLevel, value: s.geographyValue }));
     return Array.from(unique.values());
-  }, [stats]);
+  }, [filteredStats]);
 
   const { data: censusData } = useCensusBatch(geoList);
 
@@ -89,14 +127,14 @@ export default function Reports() {
     if (selectedProgram?.locations) {
       selectedProgram.locations.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).forEach(l => locs.push(l));
     }
-    stats?.forEach(s => {
+    filteredStats?.forEach(s => {
       const label = `${s.geographyValue}, ${s.geographyLevel === "State" ? "USA" : "California"}`;
       if (!locs.includes(label) && !locs.includes(s.geographyValue)) {
         locs.push(label);
       }
     });
     return locs;
-  }, [selectedProgram, stats]);
+  }, [selectedProgram, filteredStats]);
 
   const geoCoords = useGeocode(serviceAreaLocations);
 
@@ -105,7 +143,7 @@ export default function Reports() {
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
     entries.forEach(entry => {
-      const month = new Date(entry.date).getMonth();
+      const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
       monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
     });
@@ -148,11 +186,11 @@ export default function Reports() {
     window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank");
   };
 
-  const pdfReady = !!(selectedProgram && orgs?.[0] && stats && entries && !statsLoading);
+  const pdfReady = !!(selectedProgram && orgs?.[0] && filteredStats && entries && !statsLoading);
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
   const handlePdfDownload = async () => {
-    if (!selectedProgram || !orgs?.[0] || !stats || !entries) {
+    if (!selectedProgram || !orgs?.[0] || !filteredStats || !entries) {
       toast({ title: "Not Ready", description: "Please wait for data to finish loading before downloading.", variant: "destructive" });
       return;
     }
@@ -165,7 +203,7 @@ export default function Reports() {
         if (vals && primaryMetric) return sum + (vals[primaryMetric.name] || 0);
         return sum;
       }, 0);
-      const geoSummary = (stats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
+      const geoSummary = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
       const res = await fetch("/api/report/ai-narrative", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -195,7 +233,7 @@ export default function Reports() {
       generateImpactStudyPdf({
         program: selectedProgram,
         org: orgs[0] as any,
-        stats: stats || [],
+        stats: filteredStats || [],
         censusData: (censusData || []) as any,
         ageGroupData: (ageGroupData || []) as any,
         entries: (entries || []) as any,
@@ -216,7 +254,7 @@ export default function Reports() {
           <p className="text-muted-foreground mt-1">Visualize and export your impact data.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={selectedProgramId} onValueChange={setSelectedProgramId}>
+          <Select value={selectedProgramId} onValueChange={(v) => { setSelectedProgramId(v); setSelectedYear("all"); }}>
             <SelectTrigger className="w-[240px]" data-testid="select-report-program">
               <SelectValue placeholder="Select Program" />
             </SelectTrigger>
@@ -226,6 +264,20 @@ export default function Reports() {
               ))}
             </SelectContent>
           </Select>
+          {selectedProgramId && availableYears.length > 0 && (
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="w-[140px]" data-testid="select-report-year">
+                <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {availableYears.map(y => (
+                  <SelectItem key={y} value={y.toString()}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           {selectedProgramId && (
             <>
               <Button variant="outline" onClick={handlePdfDownload} disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
@@ -275,10 +327,10 @@ export default function Reports() {
       ) : activeTab === "charts" ? (
         <>
           {/* Summary Row */}
-          {stats && stats.length > 0 && (
+          {filteredStats && filteredStats.length > 0 && (
             <div className="grid sm:grid-cols-4 gap-4">
               {["SPA", "City", "County", "State"].map(level => {
-                const levelStats = stats.filter(s => s.geographyLevel === level);
+                const levelStats = filteredStats.filter(s => s.geographyLevel === level);
                 const total = levelStats.reduce((sum, s) => sum + (s.metrics[primaryMetric] || 0), 0);
                 const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
                 const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
@@ -589,7 +641,7 @@ export default function Reports() {
                     return order.indexOf(a.geographyLevel) - order.indexOf(b.geographyLevel);
                   })
                   .map((census, i) => {
-                  const matchingStat = stats?.find(
+                  const matchingStat = filteredStats?.find(
                     s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
                   );
                   const impactTotal = matchingStat && primaryMetric
@@ -683,7 +735,7 @@ export default function Reports() {
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {ageGroupData.map((geo, i) => {
-                  const matchingStat = stats?.find(
+                  const matchingStat = filteredStats?.find(
                     s => s.geographyLevel === geo.geographyLevel && s.geographyValue === geo.geographyValue
                   );
                   const impactTotal = matchingStat && primaryMetric
