@@ -31,6 +31,7 @@ export interface IStorage {
   deleteProgram(id: number): Promise<void>;
 
   createImpactMetric(metric: InsertImpactMetric): Promise<ImpactMetric>;
+  updateImpactMetric(id: number, data: Partial<InsertImpactMetric>): Promise<ImpactMetric>;
   deleteImpactMetric(id: number): Promise<void>;
 
   getImpactEntries(programId: number, geographyLevel?: string): Promise<ImpactEntry[]>;
@@ -181,6 +182,11 @@ export class DatabaseStorage implements IStorage {
   async createImpactMetric(metric: InsertImpactMetric): Promise<ImpactMetric> {
     const [created] = await db.insert(impactMetrics).values(metric).returning();
     return created;
+  }
+
+  async updateImpactMetric(id: number, data: Partial<InsertImpactMetric>): Promise<ImpactMetric> {
+    const [updated] = await db.update(impactMetrics).set(data).where(eq(impactMetrics.id, id)).returning();
+    return updated;
   }
 
   async deleteImpactMetric(id: number): Promise<void> {

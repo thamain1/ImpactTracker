@@ -255,6 +255,27 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const programId = Number(req.params.programId);
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
+    try {
+      const input = api.metrics.update.input.parse(req.body);
+      const metricId = Number(req.params.id);
+      const program = await storage.getProgram(programId);
+      if (!program) return res.status(404).json({ message: "Program not found" });
+      const metricBelongs = program.metrics.some(m => m.id === metricId);
+      if (!metricBelongs) return res.status(404).json({ message: "Metric not found in this program" });
+      const updated = await storage.updateImpactMetric(metricId, { countsAsParticipant: input.countsAsParticipant });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: err.errors[0].message });
+      }
+      throw err;
+    }
+  });
+
   app.delete("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
     const userId = (req.user as any).claims.sub;
     const programId = Number(req.params.programId);

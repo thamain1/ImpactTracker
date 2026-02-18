@@ -75,7 +75,7 @@ export function useCreateMetric(programId: number) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string; unit: string }) => {
+    mutationFn: async (data: { name: string; unit: string; countsAsParticipant?: boolean }) => {
       const res = await apiRequest("POST", `/api/programs/${programId}/metrics`, data);
       return res.json();
     },
@@ -83,6 +83,25 @@ export function useCreateMetric(programId: number) {
       queryClient.invalidateQueries({ queryKey: [api.programs.get.path, programId] });
       queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
       toast({ title: "Success", description: "Metric added successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+}
+
+export function useUpdateMetric(programId: number) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ metricId, data }: { metricId: number; data: { countsAsParticipant: boolean } }) => {
+      const res = await apiRequest("PATCH", `/api/programs/${programId}/metrics/${metricId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.programs.get.path, programId] });
+      queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

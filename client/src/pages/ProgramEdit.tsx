@@ -3,14 +3,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation, useRoute } from "wouter";
-import { useProgram, useUpdateProgram, useCreateMetric, useDeleteMetric } from "@/hooks/use-programs";
+import { useProgram, useUpdateProgram, useCreateMetric, useDeleteMetric, useUpdateMetric } from "@/hooks/use-programs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, ArrowLeft, Save, Clipboard, MapPin, Users, Target, Plus, Trash2 } from "lucide-react";
+import { Loader2, ArrowLeft, Save, Clipboard, MapPin, Users, Target, Plus, Trash2, UserCheck } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -40,8 +41,10 @@ export default function ProgramEdit() {
   const updateProgram = useUpdateProgram(programId);
   const createMetric = useCreateMetric(programId);
   const deleteMetric = useDeleteMetric(programId);
+  const updateMetric = useUpdateMetric(programId);
   const [newMetricName, setNewMetricName] = useState("");
   const [newMetricUnit, setNewMetricUnit] = useState("");
+  const [newMetricCountsAsParticipant, setNewMetricCountsAsParticipant] = useState(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -89,8 +92,8 @@ export default function ProgramEdit() {
   const handleAddMetric = () => {
     if (!newMetricName.trim() || !newMetricUnit.trim()) return;
     createMetric.mutate(
-      { name: newMetricName.trim(), unit: newMetricUnit.trim() },
-      { onSuccess: () => { setNewMetricName(""); setNewMetricUnit(""); } }
+      { name: newMetricName.trim(), unit: newMetricUnit.trim(), countsAsParticipant: newMetricCountsAsParticipant },
+      { onSuccess: () => { setNewMetricName(""); setNewMetricUnit(""); setNewMetricCountsAsParticipant(true); } }
     );
   };
 
@@ -429,40 +432,55 @@ export default function ProgramEdit() {
 
                   <div className="space-y-2">
                     {program.metrics.map(m => (
-                      <div key={m.id} className="flex items-center justify-between gap-2 border rounded-md p-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium text-sm text-slate-700" data-testid={`text-metric-name-${m.id}`}>{m.name}</span>
-                          <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.unit}</span>
-                        </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-muted-foreground shrink-0"
-                              data-testid={`button-delete-metric-${m.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Remove Metric</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to remove "{m.name}"? This won't delete existing impact data, but the metric will no longer appear in new entries.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => deleteMetric.mutate(m.id)}
-                                data-testid={`button-confirm-delete-metric-${m.id}`}
+                      <div key={m.id} className="border rounded-md p-3 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm text-slate-700" data-testid={`text-metric-name-${m.id}`}>{m.name}</span>
+                            <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">{m.unit}</span>
+                          </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-muted-foreground shrink-0"
+                                data-testid={`button-delete-metric-${m.id}`}
                               >
-                                Remove
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remove Metric</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to remove "{m.name}"? This won't delete existing impact data, but the metric will no longer appear in new entries.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => deleteMetric.mutate(m.id)}
+                                  data-testid={`button-confirm-delete-metric-${m.id}`}
+                                >
+                                  Remove
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer ml-1">
+                          <Checkbox
+                            checked={(m as any).countsAsParticipant !== false}
+                            onCheckedChange={(checked) =>
+                              updateMetric.mutate({ metricId: m.id, data: { countsAsParticipant: !!checked } })
+                            }
+                            data-testid={`checkbox-participant-${m.id}`}
+                          />
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <UserCheck className="w-3 h-3" />
+                            Counts as participant (people served)
+                          </span>
+                        </label>
                       </div>
                     ))}
                     {program.metrics.length === 0 && (
@@ -472,8 +490,8 @@ export default function ProgramEdit() {
 
                   <div className="border-t pt-4 mt-4">
                     <h4 className="text-sm font-medium mb-3">Add New Metric</h4>
-                    <div className="flex gap-3 items-end">
-                      <div className="flex-1">
+                    <div className="flex gap-3 items-end flex-wrap">
+                      <div className="flex-1 min-w-[150px]">
                         <label className="text-xs text-muted-foreground">Metric Name</label>
                         <Input
                           placeholder="e.g. Meals Served"
@@ -507,6 +525,17 @@ export default function ProgramEdit() {
                         Add
                       </Button>
                     </div>
+                    <label className="flex items-center gap-2 cursor-pointer mt-2 ml-1">
+                      <Checkbox
+                        checked={newMetricCountsAsParticipant}
+                        onCheckedChange={(checked) => setNewMetricCountsAsParticipant(!!checked)}
+                        data-testid="checkbox-new-metric-participant"
+                      />
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <UserCheck className="w-3 h-3" />
+                        Counts as participant (people served)
+                      </span>
+                    </label>
                   </div>
                 </CardContent>
               </Card>

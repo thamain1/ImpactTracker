@@ -182,6 +182,15 @@ export const api = {
         400: errorSchemas.validation,
       },
     },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/programs/:programId/metrics/:id' as const,
+      input: z.object({ countsAsParticipant: z.boolean() }),
+      responses: {
+        200: z.custom<typeof impactMetrics.$inferSelect>(),
+        400: errorSchemas.validation,
+      },
+    },
     delete: {
       method: 'DELETE' as const,
       path: '/api/programs/:programId/metrics/:id' as const,
