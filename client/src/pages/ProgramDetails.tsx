@@ -238,7 +238,7 @@ export default function ProgramDetails() {
                     {entries?.slice(0, 5).map((entry) => (
                       <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 pl-2 text-slate-600">
-                          {format(new Date(entry.date), 'MMM d, yyyy')}
+                          {format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}
                         </td>
                         <td className="py-3">
                           <div className="flex items-center gap-2">

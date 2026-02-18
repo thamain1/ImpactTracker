@@ -888,7 +888,7 @@ export default function Reports() {
                     const mv = entry.metricValues as Record<string, number>;
                     return (
                       <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/50">
-                        <td className="p-3">{format(new Date(entry.date), 'MMM d, yyyy')}</td>
+                        <td className="p-3">{format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}</td>
                         <td className="p-3">
                           <Badge variant="outline" className="text-xs">{entry.geographyLevel}</Badge>
                         </td>
