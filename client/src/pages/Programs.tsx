@@ -9,6 +9,7 @@ import { format } from "date-fns";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+
 import { useState } from "react";
 import { CreateOrgDialog } from "@/components/CreateOrgDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -33,7 +34,6 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function Programs() {
-  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
@@ -41,7 +41,7 @@ export default function Programs() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   
-  const currentOrgId = selectedOrgId ? parseInt(selectedOrgId) : orgs?.[0]?.id;
+  const currentOrgId = orgs?.[0]?.id;
   const { data: programs, isLoading: programsLoading } = usePrograms(currentOrgId);
 
   const filtered = programs?.filter(p => {
@@ -97,16 +97,6 @@ export default function Programs() {
           <p className="text-muted-foreground mt-1">Manage your initiatives and track their success.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Select value={selectedOrgId || orgs[0].id.toString()} onValueChange={setSelectedOrgId}>
-            <SelectTrigger className="w-[180px]" data-testid="select-org-filter">
-              <SelectValue placeholder="Select Organization" />
-            </SelectTrigger>
-            <SelectContent>
-              {orgs.map(org => (
-                <SelectItem key={org.id} value={org.id.toString()}>{org.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Button onClick={() => navigate("/programs/new")} data-testid="button-new-program">
             <Plus className="w-4 h-4 mr-2" /> New Program
           </Button>

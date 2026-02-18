@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -63,6 +63,12 @@ export default function ProgramWizard() {
       metrics: [{ name: "Participants", unit: "people" }],
     },
   });
+
+  useEffect(() => {
+    if (orgs && orgs.length > 0 && !form.getValues("orgId")) {
+      form.setValue("orgId", orgs[0].id);
+    }
+  }, [orgs, form]);
 
   const metrics = form.watch("metrics");
 
@@ -157,28 +163,30 @@ export default function ProgramWizard() {
               {/* Step 1: Basics */}
               {step === 0 && (
                 <>
-                  <FormField
-                    control={form.control}
-                    name="orgId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Organization</FormLabel>
-                        <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value?.toString()}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-org">
-                              <SelectValue placeholder="Select organization" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {orgs?.map(org => (
-                              <SelectItem key={org.id} value={org.id.toString()}>{org.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {orgs && orgs.length > 1 && (
+                    <FormField
+                      control={form.control}
+                      name="orgId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Organization</FormLabel>
+                          <Select onValueChange={(v) => field.onChange(Number(v))} value={field.value?.toString()}>
+                            <FormControl>
+                              <SelectTrigger data-testid="select-org">
+                                <SelectValue placeholder="Select organization" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {orgs?.map(org => (
+                                <SelectItem key={org.id} value={org.id.toString()}>{org.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}
