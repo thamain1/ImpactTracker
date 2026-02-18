@@ -24,6 +24,26 @@ async function userOwnsProgram(userId: string, programId: number): Promise<boole
   return userOwnsOrg(userId, program.orgId);
 }
 
+import type { ProgramWithMetrics } from "@shared/schema";
+
+function getParticipantMetricNames(program: ProgramWithMetrics): Set<string> {
+  const participantMetrics = program.metrics.filter(m => m.countsAsParticipant !== false);
+  if (participantMetrics.length > 0) {
+    return new Set(participantMetrics.map(m => m.name));
+  }
+  return program.metrics.length > 0 ? new Set([program.metrics[0].name]) : new Set();
+}
+
+function sumParticipantMetrics(metricValues: Record<string, number>, participantNames: Set<string>): number {
+  let total = 0;
+  Array.from(participantNames).forEach(name => {
+    if (metricValues[name] != null) {
+      total += Number(metricValues[name]);
+    }
+  });
+  return total;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -387,9 +407,9 @@ export async function registerRoutes(
 
       const scopedOrgIds = orgId ? [orgId] : userOrgs.map(o => o.id);
       const allPrograms = (await Promise.all(scopedOrgIds.map(id => storage.getPrograms(id)))).flat();
-      const primaryMetricByProgram: Record<number, string | null> = {};
+      const participantNamesByProgram: Record<number, Set<string>> = {};
       allPrograms.forEach(p => {
-        primaryMetricByProgram[p.id] = p.metrics.length > 0 ? p.metrics[0].name : null;
+        participantNamesByProgram[p.id] = getParticipantMetricNames(p);
       });
 
       const orgProgramIds = new Set(allPrograms.map(p => p.id));
@@ -413,10 +433,8 @@ export async function registerRoutes(
         if (!entry.geographyValue) return;
         const key = `${entry.geographyLevel}:${entry.geographyValue}`;
         const mv = entry.metricValues as Record<string, number>;
-        const primaryMetric = primaryMetricByProgram[entry.programId];
-        const total = primaryMetric && mv[primaryMetric] != null
-          ? Number(mv[primaryMetric])
-          : 0;
+        const participantNames = participantNamesByProgram[entry.programId] || new Set();
+        const total = sumParticipantMetrics(mv, participantNames);
         impactCounts[key] = (impactCounts[key] || 0) + total;
 
         const parents = getParentGeographies(entry.geographyLevel, entry.geographyValue);
@@ -506,6 +524,10 @@ export async function registerRoutes(
       const orgEntries = allEntries.filter(e => orgProgramIds.has(e.programId));
 
       const programMap = new Map(orgPrograms.map(p => [p.id, p]));
+      const participantNamesByProg: Record<number, Set<string>> = {};
+      orgPrograms.forEach(p => {
+        participantNamesByProg[p.id] = getParticipantMetricNames(p);
+      });
 
       const ytdEntries = orgEntries.filter(e => {
         const entryYear = new Date(e.date).getFullYear();
@@ -517,7 +539,8 @@ export async function registerRoutes(
       ytdEntries.forEach(entry => {
         const month = new Date(entry.date).getMonth();
         const mv = entry.metricValues as Record<string, number>;
-        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        const participantNames = participantNamesByProg[entry.programId] || new Set();
+        const total = sumParticipantMetrics(mv, participantNames);
         monthlyCountsMap[month] = (monthlyCountsMap[month] || 0) + total;
       });
       const participantsByMonth = monthNames.map((name, i) => ({
@@ -528,7 +551,8 @@ export async function registerRoutes(
       const programCounts: Record<number, number> = {};
       ytdEntries.forEach(entry => {
         const mv = entry.metricValues as Record<string, number>;
-        const total = Object.values(mv).reduce((sum, v) => sum + Number(v), 0);
+        const participantNames = participantNamesByProg[entry.programId] || new Set();
+        const total = sumParticipantMetrics(mv, participantNames);
         programCounts[entry.programId] = (programCounts[entry.programId] || 0) + total;
       });
       const participantsByProgram = Object.entries(programCounts).map(([pid, count]) => ({
@@ -553,10 +577,10 @@ export async function registerRoutes(
 
       const goalVsActual = orgPrograms.map(prog => {
         const progEntries = ytdEntries.filter(e => e.programId === prog.id);
-        const primaryMetricName = prog.metrics.length > 0 ? prog.metrics[0].name : null;
+        const participantNames = getParticipantMetricNames(prog);
         const actual = progEntries.reduce((sum, entry) => {
           const mv = entry.metricValues as Record<string, number>;
-          return sum + (primaryMetricName ? Number(mv[primaryMetricName] || 0) : 0);
+          return sum + sumParticipantMetrics(mv, participantNames);
         }, 0);
 
         let goalTarget: number | null = null;
@@ -646,7 +670,8 @@ export async function registerRoutes(
       const targetPopulation = body.targetPopulation || body.program?.targetPopulation || "";
       const goals = body.goals || body.program?.goals || "";
       const totalParticipants = body.totalParticipants || body.totalPrimary || 0;
-      const primaryMetricName = body.primaryMetricName || body.program?.metrics?.[0]?.name || "Participants";
+      const participantMetrics = (body.program?.metrics || []).filter((m: any) => m.countsAsParticipant !== false);
+      const primaryMetricName = body.primaryMetricName || (participantMetrics.length > 0 ? participantMetrics.map((m: any) => m.name).join(", ") : body.program?.metrics?.[0]?.name || "Participants");
       const geographies = body.geographies || (body.stats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).join(", ");
       const totalCost = body.totalCost || body.program?.totalCost || 0;
       const costPerParticipant = body.program?.costPerParticipant || (totalParticipants > 0 && totalCost > 0 ? (totalCost / totalParticipants).toFixed(2) : null);

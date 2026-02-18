@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Plus, Trash2, Loader2, ArrowLeft, ArrowRight, Check, Clipboard, MapPin, Users, Target } from "lucide-react";
+import { Plus, Trash2, Loader2, ArrowLeft, ArrowRight, Check, Clipboard, MapPin, Users, Target, UserCheck } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const formSchema = api.programs.create.input.extend({
@@ -60,7 +61,7 @@ export default function ProgramWizard() {
       goals: "",
       costPerParticipant: "",
       locations: "",
-      metrics: [{ name: "Participants", unit: "people" }],
+      metrics: [{ name: "Participants", unit: "people", countsAsParticipant: true }],
     },
   });
 
@@ -74,7 +75,7 @@ export default function ProgramWizard() {
 
   const addMetric = () => {
     const current = form.getValues("metrics");
-    form.setValue("metrics", [...current, { name: "", unit: "" }]);
+    form.setValue("metrics", [...current, { name: "", unit: "", countsAsParticipant: true }]);
   };
 
   const removeMetric = (index: number) => {
@@ -448,45 +449,66 @@ export default function ProgramWizard() {
                   </p>
 
                   {metrics.map((_, index) => (
-                    <div key={index} className="flex gap-3 items-end">
+                    <div key={index} className="space-y-2">
+                      <div className="flex gap-3 items-end">
+                        <FormField
+                          control={form.control}
+                          name={`metrics.${index}.name`}
+                          render={({ field }) => (
+                            <FormItem className="flex-1">
+                              <FormLabel className="text-xs">Metric Name</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. Meals Served" {...field} data-testid={`input-metric-name-${index}`} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`metrics.${index}.unit`}
+                          render={({ field }) => (
+                            <FormItem className="w-28">
+                              <FormLabel className="text-xs">Unit</FormLabel>
+                              <FormControl>
+                                <Input placeholder="e.g. meals" {...field} data-testid={`input-metric-unit-${index}`} />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        {metrics.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => removeMetric(index)}
+                            data-testid={`button-remove-metric-${index}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
                       <FormField
                         control={form.control}
-                        name={`metrics.${index}.name`}
+                        name={`metrics.${index}.countsAsParticipant`}
                         render={({ field }) => (
-                          <FormItem className="flex-1">
-                            <FormLabel className="text-xs">Metric Name</FormLabel>
+                          <FormItem className="flex items-center gap-2 ml-1">
                             <FormControl>
-                              <Input placeholder="e.g. Meals Served" {...field} data-testid={`input-metric-name-${index}`} />
+                              <Checkbox
+                                checked={field.value !== false}
+                                onCheckedChange={field.onChange}
+                                data-testid={`checkbox-participant-${index}`}
+                              />
                             </FormControl>
-                            <FormMessage />
+                            <FormLabel className="text-xs text-muted-foreground font-normal cursor-pointer leading-none pb-0">
+                              <UserCheck className="w-3 h-3 inline mr-1" />
+                              Counts as participant (people served)
+                            </FormLabel>
                           </FormItem>
                         )}
                       />
-                      <FormField
-                        control={form.control}
-                        name={`metrics.${index}.unit`}
-                        render={({ field }) => (
-                          <FormItem className="w-28">
-                            <FormLabel className="text-xs">Unit</FormLabel>
-                            <FormControl>
-                              <Input placeholder="e.g. meals" {...field} data-testid={`input-metric-unit-${index}`} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      {metrics.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive shrink-0"
-                          onClick={() => removeMetric(index)}
-                          data-testid={`button-remove-metric-${index}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
                     </div>
                   ))}
 

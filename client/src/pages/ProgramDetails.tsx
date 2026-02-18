@@ -56,19 +56,28 @@ export default function ProgramDetails() {
     });
   }, [allEntries, selectedYear]);
 
-  const primaryMetric = program?.metrics[0]?.name;
+  const participantMetricNames = useMemo(() => {
+    if (!program) return new Set<string>();
+    const participant = program.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.name));
+    return program.metrics.length > 0 ? new Set([program.metrics[0].name]) : new Set<string>();
+  }, [program]);
+
+  const primaryMetric = program?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || program?.metrics[0]?.name;
 
   const participantsByMonth = useMemo(() => {
-    if (!entries || !primaryMetric) return [];
+    if (!entries || participantMetricNames.size === 0) return [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
     entries.forEach(entry => {
       const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
-      monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
+      let total = 0;
+      participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
+      monthCounts[month] = (monthCounts[month] || 0) + total;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, primaryMetric]);
+  }, [entries, participantMetricNames]);
 
   if (progLoading || statsLoading) {
     return (

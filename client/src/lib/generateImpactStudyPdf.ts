@@ -14,7 +14,7 @@ interface ProgramData {
   goals?: string | null;
   costPerParticipant?: string | null;
   locations?: string | null;
-  metrics: { name: string; unit: string }[];
+  metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
 }
 
 interface OrgData {
@@ -122,15 +122,23 @@ export function generateImpactStudyPdf(data: ReportData) {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  const primaryMetric = program.metrics[0]?.name || "Participants";
+  const participantMetrics = program.metrics.filter(m => m.countsAsParticipant !== false);
+  const participantMetricSet = new Set(
+    participantMetrics.length > 0
+      ? participantMetrics.map(m => m.name)
+      : program.metrics.length > 0 ? [program.metrics[0].name] : []
+  );
+  const primaryMetric = Array.from(participantMetricSet).join(", ") || "Participants";
 
   const totalPrimary = entries.reduce((sum, e) => {
     const mv = e.metricValues as Record<string, number>;
-    return sum + Number(mv[primaryMetric] || 0);
+    let t = 0;
+    participantMetricSet.forEach(name => { t += Number(mv[name] || 0); });
+    return sum + t;
   }, 0);
 
   const secondaryMetrics: Record<string, number> = {};
-  program.metrics.slice(1).forEach(m => {
+  program.metrics.filter(m => !participantMetricSet.has(m.name)).forEach(m => {
     secondaryMetrics[m.name] = entries.reduce((sum, e) => {
       const mv = e.metricValues as Record<string, number>;
       return sum + Number(mv[m.name] || 0);
@@ -488,7 +496,8 @@ export function generateImpactStudyPdf(data: ReportData) {
   drawSectionHeader("Program Reach by Geography");
 
   const reachData = stats.map(s => {
-    const val = Number(s.metrics[primaryMetric] || 0);
+    let val = 0;
+    participantMetricSet.forEach(name => { val += Number(s.metrics[name] || 0); });
     const census = censusData.find(c => c.geographyLevel === s.geographyLevel && c.geographyValue === s.geographyValue);
     const agePop = ageGroupData.find(a => a.geographyLevel === s.geographyLevel && a.geographyValue === s.geographyValue);
 
@@ -538,7 +547,9 @@ export function generateImpactStudyPdf(data: ReportData) {
     const d = new Date(entry.date + "T00:00:00");
     const key = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
     const mv = entry.metricValues as Record<string, number>;
-    monthCounts[key] = (monthCounts[key] || 0) + Number(mv[primaryMetric] || 0);
+    let t = 0;
+    participantMetricSet.forEach(name => { t += Number(mv[name] || 0); });
+    monthCounts[key] = (monthCounts[key] || 0) + t;
   });
 
   const monthlyData = Object.entries(monthCounts).map(([month, count]) => [month, formatNumber(count)]);

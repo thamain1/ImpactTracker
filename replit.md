@@ -56,7 +56,7 @@ client/src/
 ## Database Schema
 - `organizations` - id, name, slug, address, phone, website, contactEmail, mission, vision
 - `programs` - id, orgId, name, description, type, status (active/completed/draft), startDate, endDate, targetPopulation, goals, locations
-- `impact_metrics` - id, programId, name, unit
+- `impact_metrics` - id, programId, name, unit, countsAsParticipant (boolean, default true)
 - `impact_entries` - id, programId, userId, date, geographyLevel (SPA/City/County/State), geographyValue, zipCode, demographics, outcomes, metricValues (jsonb)
 - `user_roles` - id, userId, orgId, role (admin/can_edit/can_view/can_view_download)
 - `users` - Replit Auth managed
@@ -101,3 +101,10 @@ client/src/
 - Programs page with grid/table view toggle, search, status filter, delete
 - Reports page with charts/raw data tabs and CSV export
 - Dashboard with geography summary tiles
+- **Counts as Participant flag**: Each metric has a `countsAsParticipant` boolean (default true)
+  - Metrics flagged as participant are summed together for total participant counts
+  - Non-participant metrics (e.g., resources distributed) are excluded from participant totals
+  - Affects dashboard charts, census comparison, reports, program details, and PDF generation
+  - ProgramWizard Step 4 shows checkbox per metric for toggling participant flag
+  - Server helper functions: `getParticipantMetricNames()` and `sumParticipantMetrics()`
+  - Backward compatible: existing metrics default to countsAsParticipant=true

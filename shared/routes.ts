@@ -139,7 +139,7 @@ export const api = {
       method: 'POST' as const,
       path: '/api/programs' as const,
       input: insertProgramSchema.extend({
-        metrics: z.array(z.object({ name: z.string(), unit: z.string() })),
+        metrics: z.array(z.object({ name: z.string(), unit: z.string(), countsAsParticipant: z.boolean().optional().default(true) })),
       }),
       responses: {
         201: z.custom<typeof programs.$inferSelect & { metrics: typeof impactMetrics.$inferSelect[] }>(),
@@ -176,7 +176,7 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/programs/:programId/metrics' as const,
-      input: z.object({ name: z.string().min(1), unit: z.string().min(1) }),
+      input: z.object({ name: z.string().min(1), unit: z.string().min(1), countsAsParticipant: z.boolean().optional().default(true) }),
       responses: {
         201: z.custom<typeof impactMetrics.$inferSelect>(),
         400: errorSchemas.validation,

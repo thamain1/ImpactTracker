@@ -112,7 +112,14 @@ export default function Reports() {
     return Object.values(aggregation);
   }, [stats, entries, selectedYear]);
 
-  const primaryMetric = selectedProgram?.metrics[0]?.name || "";
+  const participantMetricNames = useMemo(() => {
+    if (!selectedProgram) return new Set<string>();
+    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.name));
+    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].name]) : new Set<string>();
+  }, [selectedProgram]);
+
+  const primaryMetric = selectedProgram?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || selectedProgram?.metrics[0]?.name || "";
 
   const geoList = useMemo(() => {
     if (!filteredStats) return [];
@@ -147,19 +154,21 @@ export default function Reports() {
   const geoCoords = useGeocode(serviceAreaLocations);
 
   const participantsByMonth = useMemo(() => {
-    if (!entries || !primaryMetric) return [];
+    if (!entries || participantMetricNames.size === 0) return [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
     entries.forEach(entry => {
       const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
-      monthCounts[month] = (monthCounts[month] || 0) + Number(mv[primaryMetric] || 0);
+      let total = 0;
+      participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
+      monthCounts[month] = (monthCounts[month] || 0) + total;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, primaryMetric]);
+  }, [entries, participantMetricNames]);
 
   const goalData = useMemo(() => {
-    if (!selectedProgram || !entries || !primaryMetric) return null;
+    if (!selectedProgram || !entries || participantMetricNames.size === 0) return null;
     let goalTarget: number | null = null;
     if (selectedProgram.goals) {
       const match = selectedProgram.goals.match(/(\d[\d,]*)/);
@@ -167,10 +176,12 @@ export default function Reports() {
     }
     const actual = entries.reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
-      return sum + Number(mv[primaryMetric] || 0);
+      let total = 0;
+      participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
+      return sum + total;
     }, 0);
     return { goalTarget, actual, goals: selectedProgram.goals };
-  }, [selectedProgram, entries, primaryMetric]);
+  }, [selectedProgram, entries, participantMetricNames]);
 
   const totalCensusPop = useMemo(() => {
     if (!censusData) return 0;
@@ -183,12 +194,14 @@ export default function Reports() {
   }, [ageGroupData]);
 
   const totalImpact = useMemo(() => {
-    if (!entries || !primaryMetric) return 0;
+    if (!entries || participantMetricNames.size === 0) return 0;
     return entries.reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
-      return sum + Number(mv[primaryMetric] || 0);
+      let total = 0;
+      participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
+      return sum + total;
     }, 0);
-  }, [entries, primaryMetric]);
+  }, [entries, participantMetricNames]);
 
   const handleCsvDownload = () => {
     window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank");
@@ -205,12 +218,15 @@ export default function Reports() {
     setPdfGenerating(true);
     let aiNarrative = undefined;
     try {
-      const primaryMetric = selectedProgram.metrics?.[0];
+      const pdfParticipantNames = participantMetricNames;
       const totalPrimary = (entries || []).reduce((sum: number, e: any) => {
         const vals = e.metricValues as Record<string, number> | null;
-        if (vals && primaryMetric) return sum + (vals[primaryMetric.name] || 0);
-        return sum;
+        if (!vals) return sum;
+        let t = 0;
+        pdfParticipantNames.forEach(name => { t += Number(vals[name] || 0); });
+        return sum + t;
       }, 0);
+      const participantLabel = Array.from(pdfParticipantNames).join(", ") || "Participants";
       const geoSummary = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
       const res = await fetch("/api/report/ai-narrative", {
         method: "POST",
@@ -225,9 +241,9 @@ export default function Reports() {
           targetPopulation: selectedProgram.targetPopulation || "",
           goals: selectedProgram.goals || "",
           totalParticipants: totalPrimary,
-          primaryMetricName: primaryMetric?.name || "Participants",
+          primaryMetricName: participantLabel,
           geographies: geoSummary,
-          totalCost: selectedProgram.totalCost || 0,
+          program: selectedProgram,
         }),
       });
       if (res.ok) {
@@ -339,7 +355,11 @@ export default function Reports() {
             <div className="grid sm:grid-cols-4 gap-4">
               {["SPA", "City", "County", "State"].map(level => {
                 const levelStats = filteredStats.filter(s => s.geographyLevel === level);
-                const total = levelStats.reduce((sum, s) => sum + (s.metrics[primaryMetric] || 0), 0);
+                const total = levelStats.reduce((sum, s) => {
+                  let t = 0;
+                  participantMetricNames.forEach(name => { t += Number(s.metrics[name] || 0); });
+                  return sum + t;
+                }, 0);
                 const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
                 const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
                 const reachPct = levelPop > 0 && total > 0
@@ -350,7 +370,7 @@ export default function Reports() {
                     <CardContent className="p-4">
                       <p className="text-xs text-muted-foreground font-medium uppercase">{level}</p>
                       <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">{primaryMetric}</p>
+                      <p className="text-xs text-muted-foreground">Participants</p>
                       {levelPop > 0 && (
                         <div className="mt-2 pt-2 border-t space-y-1">
                           <div className="flex items-center justify-between gap-2 text-xs">
@@ -652,9 +672,10 @@ export default function Reports() {
                   const matchingStat = filteredStats?.find(
                     s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
                   );
-                  const impactTotal = matchingStat && primaryMetric
-                    ? (matchingStat.metrics[primaryMetric] || 0)
-                    : 0;
+                  let impactTotal = 0;
+                  if (matchingStat) {
+                    participantMetricNames.forEach(name => { impactTotal += Number(matchingStat.metrics[name] || 0); });
+                  }
                   const reachPercent = census.totalPopulation && impactTotal > 0
                     ? Math.round((impactTotal / census.totalPopulation) * 10000) / 100
                     : null;
@@ -746,9 +767,10 @@ export default function Reports() {
                   const matchingStat = filteredStats?.find(
                     s => s.geographyLevel === geo.geographyLevel && s.geographyValue === geo.geographyValue
                   );
-                  const impactTotal = matchingStat && primaryMetric
-                    ? (matchingStat.metrics[primaryMetric] || 0)
-                    : 0;
+                  let impactTotal = 0;
+                  if (matchingStat) {
+                    participantMetricNames.forEach(name => { impactTotal += Number(matchingStat.metrics[name] || 0); });
+                  }
                   const targetPop = geo.targetAgePopulation;
                   const ageReachPercent = targetPop && impactTotal > 0
                     ? Math.round((impactTotal / targetPop) * 10000) / 100

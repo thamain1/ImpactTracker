@@ -52,6 +52,7 @@ export const impactMetrics = pgTable("impact_metrics", {
   programId: integer("program_id").notNull().references(() => programs.id),
   name: text("name").notNull(),
   unit: text("unit").notNull(),
+  countsAsParticipant: boolean("counts_as_participant").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -160,5 +161,5 @@ export interface ImpactReportData {
 }
 
 export type CreateProgramRequest = InsertProgram & {
-  metrics: { name: string; unit: string }[];
+  metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
 };
