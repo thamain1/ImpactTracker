@@ -250,11 +250,34 @@ export default function ProgramDetails() {
                         </td>
                         <td className="py-3 text-right">
                           <div className="flex flex-col items-end gap-1">
-                            {Object.entries(entry.metricValues as Record<string, number>).slice(0, 2).map(([key, val]) => (
-                              <span key={key} className="text-xs text-slate-600">
-                                <span className="font-bold text-slate-900">{val.toLocaleString()}</span> {key}
-                              </span>
-                            ))}
+                            {(() => {
+                              const mv = entry.metricValues as Record<string, number>;
+                              const sorted = Object.entries(mv).sort(([a], [b]) => {
+                                const aIsParticipant = participantMetricNames.has(a);
+                                const bIsParticipant = participantMetricNames.has(b);
+                                if (aIsParticipant && !bIsParticipant) return -1;
+                                if (!aIsParticipant && bIsParticipant) return 1;
+                                return 0;
+                              });
+                              const participantTotal = sorted
+                                .filter(([k]) => participantMetricNames.has(k))
+                                .reduce((sum, [, v]) => sum + Number(v || 0), 0);
+                              const hasMultipleParticipantMetrics = sorted.filter(([k]) => participantMetricNames.has(k)).length > 1;
+                              return (
+                                <>
+                                  {hasMultipleParticipantMetrics && participantTotal > 0 && (
+                                    <span className="text-xs font-semibold text-primary">
+                                      <span className="font-bold">{participantTotal.toLocaleString()}</span> Total Participants
+                                    </span>
+                                  )}
+                                  {sorted.map(([key, val]) => (
+                                    <span key={key} className="text-xs text-slate-600">
+                                      <span className="font-bold text-slate-900">{Number(val || 0).toLocaleString()}</span> {key}
+                                    </span>
+                                  ))}
+                                </>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="py-3 pr-2 text-right">
