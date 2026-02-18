@@ -586,8 +586,11 @@ export async function registerRoutes(
       ytdEntries.forEach(entry => {
         if (!programMetrics[entry.programId]) programMetrics[entry.programId] = {};
         const mv = entry.metricValues as Record<string, number>;
+        const participantNames = participantNamesByProg[entry.programId] || new Set();
         Object.entries(mv).forEach(([metric, val]) => {
-          programMetrics[entry.programId][metric] = (programMetrics[entry.programId][metric] || 0) + Number(val);
+          if (!participantNames.has(metric)) {
+            programMetrics[entry.programId][metric] = (programMetrics[entry.programId][metric] || 0) + Number(val);
+          }
         });
       });
       const resourcesByProgram = Object.entries(programMetrics).map(([pid, metrics]) => ({
