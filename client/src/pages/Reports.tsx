@@ -12,6 +12,7 @@ import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, Alert
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { api } from "@shared/routes";
+import { getParentGeographies } from "@shared/geography";
 import { generateImpactStudyPdf } from "@/lib/generateImpactStudyPdf";
 import { useToast } from "@/hooks/use-toast";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
@@ -91,15 +92,22 @@ export default function Reports() {
     if (selectedYear === "all") return stats;
     if (!entries || entries.length === 0) return [];
     const aggregation: Record<string, { geographyLevel: string; geographyValue: string; metrics: Record<string, number> }> = {};
-    entries.forEach(entry => {
-      const key = `${entry.geographyLevel}:${entry.geographyValue}`;
+
+    function addToAgg(level: string, value: string, mv: Record<string, number>) {
+      const key = `${level}:${value}`;
       if (!aggregation[key]) {
-        aggregation[key] = { geographyLevel: entry.geographyLevel, geographyValue: entry.geographyValue, metrics: {} };
+        aggregation[key] = { geographyLevel: level, geographyValue: value, metrics: {} };
       }
-      const mv = entry.metricValues as Record<string, number>;
       Object.entries(mv).forEach(([metric, val]) => {
         aggregation[key].metrics[metric] = (aggregation[key].metrics[metric] || 0) + Number(val);
       });
+    }
+
+    entries.forEach(entry => {
+      const mv = entry.metricValues as Record<string, number>;
+      addToAgg(entry.geographyLevel, entry.geographyValue, mv);
+      const parents = getParentGeographies(entry.geographyLevel, entry.geographyValue);
+      parents.forEach(p => addToAgg(p.level, p.value, mv));
     });
     return Object.values(aggregation);
   }, [stats, entries, selectedYear]);
