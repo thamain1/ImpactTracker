@@ -8,6 +8,22 @@ import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from
 import { expandGeographies, getParentGeographies } from "./services/geography";
 import OpenAI from "openai";
 
+async function getUserOrgIds(userId: string): Promise<Set<number>> {
+  const orgs = await storage.getOrganizationsForUser(userId);
+  return new Set(orgs.map(o => o.id));
+}
+
+async function userOwnsOrg(userId: string, orgId: number): Promise<boolean> {
+  const orgIds = await getUserOrgIds(userId);
+  return orgIds.has(orgId);
+}
+
+async function userOwnsProgram(userId: string, programId: number): Promise<boolean> {
+  const program = await storage.getProgram(programId);
+  if (!program) return false;
+  return userOwnsOrg(userId, program.orgId);
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -18,7 +34,8 @@ export async function registerRoutes(
 
   // === Organizations ===
   app.get(api.organizations.list.path, isAuthenticated, async (req, res) => {
-    const orgs = await storage.getOrganizations();
+    const userId = (req.user as any).claims.sub;
+    const orgs = await storage.getOrganizationsForUser(userId);
     res.json(orgs);
   });
 
@@ -38,15 +55,21 @@ export async function registerRoutes(
   });
 
   app.get(api.organizations.get.path, isAuthenticated, async (req, res) => {
-    const org = await storage.getOrganization(Number(req.params.id));
+    const userId = (req.user as any).claims.sub;
+    const orgId = Number(req.params.id);
+    if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
+    const org = await storage.getOrganization(orgId);
     if (!org) return res.status(404).json({ message: "Organization not found" });
     res.json(org);
   });
 
   app.put(api.organizations.update.path, isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.user as any).claims.sub;
+      const orgId = Number(req.params.id);
+      if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.organizations.update.input.parse(req.body);
-      const org = await storage.updateOrganization(Number(req.params.id), input);
+      const org = await storage.updateOrganization(orgId, input);
       if (!org) return res.status(404).json({ message: "Organization not found" });
       res.json(org);
     } catch (err) {
@@ -59,18 +82,24 @@ export async function registerRoutes(
 
   // === User Roles ===
   app.get(api.userRoles.list.path, isAuthenticated, async (req, res) => {
-    const roles = await storage.getUserRoles(Number(req.params.orgId));
+    const userId = (req.user as any).claims.sub;
+    const orgId = Number(req.params.orgId);
+    if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
+    const roles = await storage.getUserRoles(orgId);
     res.json(roles);
   });
 
   app.post(api.userRoles.create.path, isAuthenticated, async (req, res) => {
     try {
+      const currentUserId = (req.user as any).claims.sub;
+      const orgId = Number(req.params.orgId);
+      if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.userRoles.create.input.parse(req.body);
       const user = await storage.findUserByEmail(input.email);
       if (!user) {
         return res.status(404).json({ message: "No user found with that email. They must sign up first." });
       }
-      const role = await storage.createUserRole(Number(req.params.orgId), user.id, input.role);
+      const role = await storage.createUserRole(orgId, user.id, input.role);
       res.status(201).json(role);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -82,8 +111,10 @@ export async function registerRoutes(
 
   app.put(api.userRoles.update.path, isAuthenticated, async (req, res) => {
     try {
-      const input = api.userRoles.update.input.parse(req.body);
+      const currentUserId = (req.user as any).claims.sub;
       const orgId = Number(req.params.orgId);
+      if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
+      const input = api.userRoles.update.input.parse(req.body);
       const roleId = Number(req.params.id);
       const roles = await storage.getUserRoles(orgId);
       const targetRole = roles.find(r => r.id === roleId);
@@ -101,7 +132,9 @@ export async function registerRoutes(
   });
 
   app.delete(api.userRoles.delete.path, isAuthenticated, async (req, res) => {
+    const currentUserId = (req.user as any).claims.sub;
     const orgId = Number(req.params.orgId);
+    if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
     const roleId = Number(req.params.id);
     const roles = await storage.getUserRoles(orgId);
     const targetRole = roles.find(r => r.id === roleId);
@@ -114,14 +147,31 @@ export async function registerRoutes(
 
   // === Programs ===
   app.get(api.programs.list.path, isAuthenticated, async (req, res) => {
-    const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
-    const progs = await storage.getPrograms(orgId);
-    res.json(progs);
+    const userId = (req.user as any).claims.sub;
+    if (req.query.orgId) {
+      const orgId = Number(req.query.orgId);
+      const userOrgs = await storage.getOrganizationsForUser(userId);
+      if (!userOrgs.some(o => o.id === orgId)) {
+        return res.json([]);
+      }
+      const progs = await storage.getPrograms(orgId);
+      return res.json(progs);
+    }
+    const userOrgs = await storage.getOrganizationsForUser(userId);
+    if (userOrgs.length === 0) return res.json([]);
+    const allProgs = [];
+    for (const org of userOrgs) {
+      const progs = await storage.getPrograms(org.id);
+      allProgs.push(...progs);
+    }
+    res.json(allProgs);
   });
 
   app.post(api.programs.create.path, isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.user as any).claims.sub;
       const input = api.programs.create.input.parse(req.body);
+      if (!(await userOwnsOrg(userId, input.orgId))) return res.status(403).json({ message: "Not authorized" });
       const { metrics, ...programData } = input;
       const metricsData = metrics.map(m => ({ ...m, programId: 0 }));
       const program = await storage.createProgram(programData, metricsData);
@@ -135,15 +185,21 @@ export async function registerRoutes(
   });
 
   app.get(api.programs.get.path, isAuthenticated, async (req, res) => {
-    const program = await storage.getProgram(Number(req.params.id));
+    const userId = (req.user as any).claims.sub;
+    const programId = Number(req.params.id);
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
+    const program = await storage.getProgram(programId);
     if (!program) return res.status(404).json({ message: "Program not found" });
     res.json(program);
   });
 
   app.put(api.programs.update.path, isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.user as any).claims.sub;
+      const programId = Number(req.params.id);
+      if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.programs.update.input.parse(req.body);
-      const program = await storage.updateProgram(Number(req.params.id), input);
+      const program = await storage.updateProgram(programId, input);
       if (!program) return res.status(404).json({ message: "Program not found" });
       res.json(program);
     } catch (err) {
@@ -155,15 +211,20 @@ export async function registerRoutes(
   });
 
   app.delete(api.programs.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteProgram(Number(req.params.id));
+    const userId = (req.user as any).claims.sub;
+    const programId = Number(req.params.id);
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
+    await storage.deleteProgram(programId);
     res.status(204).send();
   });
 
   // === Metrics ===
   app.post("/api/programs/:programId/metrics", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const programId = Number(req.params.programId);
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     try {
       const input = api.metrics.create.input.parse(req.body);
-      const programId = Number(req.params.programId);
       const metric = await storage.createImpactMetric({ ...input, programId });
       res.status(201).json(metric);
     } catch (err) {
@@ -175,6 +236,9 @@ export async function registerRoutes(
   });
 
   app.delete("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
+    const userId = (req.user as any).claims.sub;
+    const programId = Number(req.params.programId);
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     await storage.deleteImpactMetric(Number(req.params.id));
     res.status(204).send();
   });
@@ -183,7 +247,8 @@ export async function registerRoutes(
   app.get(api.impact.list.path, isAuthenticated, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
-    
+    const userId = (req.user as any).claims.sub;
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     const entries = await storage.getImpactEntries(programId, req.query.geographyLevel as string);
     res.json(entries);
   });
@@ -192,7 +257,7 @@ export async function registerRoutes(
     try {
       const input = api.impact.create.input.parse(req.body);
       const userId = (req.user as any).claims.sub;
-      
+      if (!(await userOwnsProgram(userId, input.programId))) return res.status(403).json({ message: "Not authorized" });
       const entry = await storage.createImpactEntry({ ...input, userId });
       res.status(201).json(entry);
     } catch (err) {
@@ -235,6 +300,8 @@ export async function registerRoutes(
   app.get(api.impact.stats.path, isAuthenticated, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
+    const userId = (req.user as any).claims.sub;
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
 
     const entries = await storage.getImpactEntries(programId);
     
@@ -276,6 +343,8 @@ export async function registerRoutes(
   app.get(api.impact.exportCsv.path, isAuthenticated, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
+    const userId = (req.user as any).claims.sub;
+    if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
 
     const program = await storage.getProgram(programId);
     if (!program) return res.status(404).json({ message: "Program not found" });
@@ -307,20 +376,24 @@ export async function registerRoutes(
   // === Census ===
   app.get(api.census.comparison.path, isAuthenticated, async (req, res) => {
     try {
+      const userId = (req.user as any).claims.sub;
+      const userOrgs = await storage.getOrganizationsForUser(userId);
+      const userOrgIds = new Set(userOrgs.map(o => o.id));
       const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
 
-      let allEntries = await storage.getAllImpactEntries();
+      if (orgId && !userOrgIds.has(orgId)) {
+        return res.json([]);
+      }
 
-      const allPrograms = await storage.getPrograms();
+      const scopedOrgIds = orgId ? [orgId] : userOrgs.map(o => o.id);
+      const allPrograms = (await Promise.all(scopedOrgIds.map(id => storage.getPrograms(id)))).flat();
       const primaryMetricByProgram: Record<number, string | null> = {};
       allPrograms.forEach(p => {
         primaryMetricByProgram[p.id] = p.metrics.length > 0 ? p.metrics[0].name : null;
       });
 
-      if (orgId) {
-        const orgProgramIds = new Set(allPrograms.filter(p => p.orgId === orgId).map(p => p.id));
-        allEntries = allEntries.filter(e => orgProgramIds.has(e.programId));
-      }
+      const orgProgramIds = new Set(allPrograms.map(p => p.id));
+      let allEntries = (await storage.getAllImpactEntries()).filter(e => orgProgramIds.has(e.programId));
 
       const rawGeographies: { level: string; value: string }[] = [];
       const seen = new Set<string>();
@@ -415,9 +488,18 @@ export async function registerRoutes(
   app.get(api.dashboard.charts.path, isAuthenticated, async (req, res) => {
     try {
       const currentYear = new Date().getFullYear();
+      const userId = (req.user as any).claims.sub;
+      const userOrgs = await storage.getOrganizationsForUser(userId);
+      const userOrgIds = new Set(userOrgs.map(o => o.id));
       const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
 
-      const orgPrograms = await storage.getPrograms(orgId);
+      if (orgId && !userOrgIds.has(orgId)) {
+        return res.json({ participantsByMonth: [], participantsByProgram: [], resourcesByProgram: [], goalVsActual: [] });
+      }
+
+      const orgPrograms = orgId
+        ? await storage.getPrograms(orgId)
+        : (await Promise.all(userOrgs.map(o => storage.getPrograms(o.id)))).flat();
       const orgProgramIds = new Set(orgPrograms.map(p => p.id));
 
       const allEntries = await storage.getAllImpactEntries();
@@ -509,8 +591,39 @@ export async function registerRoutes(
 
   // === Admin Stats ===
   app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
-    const stats = await storage.getAdminStats();
-    res.json(stats);
+    const userId = (req.user as any).claims.sub;
+    const userOrgs = await storage.getOrganizationsForUser(userId);
+    if (userOrgs.length === 0) {
+      return res.json({ totalOrganizations: 0, totalPrograms: 0, totalEntries: 0, byGeography: [], recentPrograms: [] });
+    }
+    const userOrgIds = new Set(userOrgs.map(o => o.id));
+    const allPrograms = (await Promise.all(userOrgs.map(o => storage.getPrograms(o.id)))).flat();
+    const programIds = new Set(allPrograms.map(p => p.id));
+    const allEntries = (await storage.getAllImpactEntries()).filter(e => programIds.has(e.programId));
+
+    const geoAgg: Record<string, { count: number; metrics: Record<string, number> }> = {};
+    allEntries.forEach(entry => {
+      const level = entry.geographyLevel;
+      if (!geoAgg[level]) geoAgg[level] = { count: 0, metrics: {} };
+      geoAgg[level].count++;
+      const mv = entry.metricValues as Record<string, number>;
+      Object.entries(mv).forEach(([k, v]) => {
+        geoAgg[level].metrics[k] = (geoAgg[level].metrics[k] || 0) + Number(v);
+      });
+    });
+    const byGeography = Object.entries(geoAgg).map(([level, data]) => ({
+      geographyLevel: level,
+      count: data.count,
+      totalMetrics: data.metrics,
+    }));
+    const recentPrograms = allPrograms.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()).slice(0, 5);
+    res.json({
+      totalOrganizations: userOrgs.length,
+      totalPrograms: allPrograms.length,
+      totalEntries: allEntries.length,
+      byGeography,
+      recentPrograms,
+    });
   });
 
   // === AI Report Generation ===
