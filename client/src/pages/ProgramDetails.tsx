@@ -228,7 +228,7 @@ export default function ProgramDetails() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      <th className="text-left font-medium text-slate-500 pb-3 pl-2">Date</th>
+                      <th className="text-left font-medium text-slate-500 pb-3 pl-2">Service Date</th>
                       <th className="text-left font-medium text-slate-500 pb-3">Location</th>
                       <th className="text-right font-medium text-slate-500 pb-3">Impact</th>
                       <th className="text-right font-medium text-slate-500 pb-3 pr-2 w-10"></th>
