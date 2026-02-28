@@ -1,0 +1,104 @@
+ImpactTracker is a web application built for nonprofit organizations to measure, track, and report the impact of their programs across different geographic areas. It helps organizations like "Sister of Watts" answer questions like: How many people did we serve? Where? How does that compare to the population in that area?
+
+Core Features
+1. Dashboard
+
+Shows key performance indicators (total participants, programs, entries)
+Charts: Participants by Month, Participants by Program, Resources by Program, Goal vs. Actual progress
+Geography summary tiles showing impact across cities, counties, SPAs, and states
+Census Bureau comparison showing population reach percentage, poverty rates, and median income for served areas
+2. Programs Management
+
+Create programs using a 4-step wizard (Basics, Details, Population & Goals, Metrics)
+Each program tracks type (Education, Healthcare, Food Security, etc.), status, date range, target population, age range, and goals
+Grid and table view options with search and status filtering
+Edit and delete programs with confirmation
+3. Impact Logging
+
+Log impact entries per program with: service date, geography level (SPA/City/County/State), location name, ZIP code, demographics, outcomes
+Each entry records metric values (e.g., 50 Participants, 200 Meals)
+Metrics have a "counts as participant" flag — so "Participants" counts toward people served, but "Backpacks" or "Meals" are tracked as resources separately
+Entries are editable after creation
+4. Reports
+
+Charts and raw data tabs
+Filter by program
+CSV export for any dataset
+5. Census Bureau Integration
+
+Real-time lookups against U.S. Census American Community Survey data
+Compares your impact numbers against actual population data
+Shows population reach %, poverty rate, and median income
+Supports age-targeted demographic analysis (e.g., how many 10-17 year olds are in the area you serve)
+SPA-level data uses pre-computed LA County estimates
+Results are cached for 30 days for performance
+6. Geographic Hierarchy Rollup
+
+Impact data automatically rolls up: City → County → State
+Also rolls up City → SPA for LA County cities
+So logging 50 participants in "Los Angeles" also counts toward Los Angeles County, California, and relevant SPAs
+7. Admin Dashboard
+
+Cross-organization aggregate statistics
+Geography breakdowns across all orgs
+Recent programs overview
+8. Settings & Team Management
+
+Edit organization profile (name, mission, vision, address, contact info)
+Add team members by email with role-based access: admin, can_edit, can_view, can_view_download
+9. AI-Enhanced PDF Reports
+
+Generate impact study reports using OpenAI
+Technical Architecture
+Frontend:
+
+React with TypeScript, built with Vite
+TailwindCSS + Shadcn/UI component library
+Recharts for data visualization
+wouter for client-side routing
+TanStack Query (React Query v5) for data fetching and caching
+Backend:
+
+Express.js with TypeScript
+Serves both API and the Vite frontend on port 5000
+Database (PostgreSQL):
+
+Managed via Drizzle ORM
+Key tables:
+organizations — org profiles (name, mission, vision, contact info)
+programs — programs with type, status, dates, goals, locations
+impact_metrics — metric definitions per program (name, unit, countsAsParticipant flag)
+impact_entries — individual impact records with date, geography, demographics, metric values (stored as JSONB)
+user_roles — maps users to orgs with role-based permissions
+users / sessions — managed by Replit Auth
+census_cache — cached Census API responses (30-day TTL)
+Authentication:
+
+Replit Auth (OpenID Connect-based)
+Session-based with server-side storage
+External APIs:
+
+U.S. Census Bureau API — population, poverty, income, and age group data
+OpenAI API — PDF impact report generation
+API Endpoints:
+
+Endpoint	Purpose
+GET/POST /api/organizations	List/create orgs
+GET/PUT /api/organizations/:id	Get/update org
+GET/POST/DELETE /api/organizations/:orgId/roles	Team member management
+GET/POST /api/programs	List/create programs
+GET/PUT/DELETE /api/programs/:id	Get/update/delete program
+PATCH /api/programs/:id/metrics/:id	Update metric settings
+GET/POST /api/impact	List/create impact entries
+GET /api/impact/stats	Aggregated stats with rollup
+GET /api/impact/export	CSV export
+GET /api/dashboard/charts	Chart data for dashboard
+GET /api/census/comparison	Census comparison data
+POST /api/census/batch	Batch census lookups
+POST /api/census/age-groups	Age-targeted demographics
+GET /api/admin/stats	Cross-org admin stats
+Security:
+
+Multi-tenant data isolation — users only see data for organizations they belong to
+Role-based access control (admin, can_edit, can_view, can_view_download)
+All API endpoints verify user membership before returning data
