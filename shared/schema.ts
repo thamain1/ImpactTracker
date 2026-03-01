@@ -79,6 +79,12 @@ export const impactEntries = pgTable("impact_entries", {
   demographics: text("demographics"),
   outcomes: text("outcomes"),
   metricValues: jsonb("metric_values").notNull(),
+  // MOU additions — Outcome percentage fields
+  pctCompletingProgram: doublePrecision("pct_completing_program"),
+  pctEmploymentGained: doublePrecision("pct_employment_gained"),
+  pctHousingSecured: doublePrecision("pct_housing_secured"),
+  pctGradeImprovement: doublePrecision("pct_grade_improvement"),
+  pctRecidivismReduction: doublePrecision("pct_recidivism_reduction"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

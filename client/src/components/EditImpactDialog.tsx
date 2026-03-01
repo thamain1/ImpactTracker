@@ -30,11 +30,20 @@ interface GeoContext {
   state?: string;
 }
 
+const pctField = z.union([z.coerce.number().min(0).max(100), z.literal("")])
+  .optional().nullable()
+  .transform(v => v === "" ? null : (typeof v === "number" ? v : null));
+
 const formSchema = insertImpactEntrySchema.extend({
   programId: z.coerce.number(),
   zipCode: z.string().optional(),
   demographics: z.string().optional(),
   outcomes: z.string().optional(),
+  pctCompletingProgram: pctField,
+  pctEmploymentGained: pctField,
+  pctHousingSecured: pctField,
+  pctGradeImprovement: pctField,
+  pctRecidivismReduction: pctField,
 });
 
 export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImpactDialogProps) {
@@ -62,6 +71,11 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
       demographics: entry.demographics || "",
       outcomes: entry.outcomes || "",
       metricValues: mv,
+      pctCompletingProgram: (entry as any).pctCompletingProgram ?? ("" as any),
+      pctEmploymentGained: (entry as any).pctEmploymentGained ?? ("" as any),
+      pctHousingSecured: (entry as any).pctHousingSecured ?? ("" as any),
+      pctGradeImprovement: (entry as any).pctGradeImprovement ?? ("" as any),
+      pctRecidivismReduction: (entry as any).pctRecidivismReduction ?? ("" as any),
     },
   });
 
@@ -76,6 +90,11 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
         demographics: entry.demographics || "",
         outcomes: entry.outcomes || "",
         metricValues: mv,
+        pctCompletingProgram: (entry as any).pctCompletingProgram ?? ("" as any),
+        pctEmploymentGained: (entry as any).pctEmploymentGained ?? ("" as any),
+        pctHousingSecured: (entry as any).pctHousingSecured ?? ("" as any),
+        pctGradeImprovement: (entry as any).pctGradeImprovement ?? ("" as any),
+        pctRecidivismReduction: (entry as any).pctRecidivismReduction ?? ("" as any),
       });
       const initial: Record<string, string> = {};
       Object.entries(mv).forEach(([k, v]) => { initial[k] = String(v); });
@@ -144,6 +163,11 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
         demographics: values.demographics || null,
         outcomes: values.outcomes || null,
         metricValues: numericMetrics,
+        pctCompletingProgram: values.pctCompletingProgram ?? null,
+        pctEmploymentGained: values.pctEmploymentGained ?? null,
+        pctHousingSecured: values.pctHousingSecured ?? null,
+        pctGradeImprovement: values.pctGradeImprovement ?? null,
+        pctRecidivismReduction: values.pctRecidivismReduction ?? null,
       },
       { onSuccess: () => onOpenChange(false) }
     );
@@ -320,6 +344,52 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* Outcome Percentages */}
+            <div className="space-y-3 border-t pt-4">
+              <div>
+                <h4 className="font-medium text-sm text-muted-foreground">Outcome Percentages (Optional)</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">Leave blank for any outcome that doesn't apply to this program.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  { name: "pctCompletingProgram", label: "% Completing Program", testId: "input-edit-pct-completing" },
+                  { name: "pctEmploymentGained", label: "% Employment Gained", testId: "input-edit-pct-employment" },
+                  { name: "pctHousingSecured", label: "% Housing Secured", testId: "input-edit-pct-housing" },
+                  { name: "pctGradeImprovement", label: "% Grade Improvement", testId: "input-edit-pct-grade" },
+                  { name: "pctRecidivismReduction", label: "% Recidivism Reduction", testId: "input-edit-pct-recidivism" },
+                ] as const).map(({ name, label, testId }) => (
+                  <FormField
+                    key={name}
+                    control={form.control}
+                    name={name}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">{label}</FormLabel>
+                        <div className="relative">
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.1}
+                              placeholder="—"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value)}
+                              className="pr-7"
+                              data-testid={testId}
+                            />
+                          </FormControl>
+                          <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
