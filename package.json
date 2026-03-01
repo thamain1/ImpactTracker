@@ -9,7 +9,7 @@
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
     "db:push": "drizzle-kit push",
-    "cf:build": "vite build",
+    "cf:build": "vite build && node -e \"import('fs').then(fs=>fs.copyFileSync('dist/public/index.html','dist/public/404.html'))\"",
     "cf:preview": "npm run cf:build && wrangler pages dev dist/public --compatibility-flag=nodejs_compat",
     "cf:deploy": "npm run cf:build && wrangler pages deploy dist/public"
   },
