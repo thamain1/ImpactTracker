@@ -323,7 +323,7 @@ export default function ProgramDetails() {
                 <div>
                   <div className="text-sm opacity-80 mb-1">Updated By</div>
                   <div className="font-bold text-xl" data-testid="text-updated-by">
-                    {user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'Unknown' : 'Unknown'}
+                    {user ? `${(user.user_metadata?.first_name as string) || ''} ${(user.user_metadata?.last_name as string) || ''}`.trim() || user.email?.split("@")[0] || 'Unknown' : 'Unknown'}
                   </div>
                 </div>
                 {program.startDate && (

@@ -55,7 +55,7 @@ export default function Dashboard() {
           <Building2 className="w-12 h-12" />
         </div>
         <h1 className="text-3xl font-heading font-bold text-slate-900 mb-3" data-testid="text-welcome">
-          Welcome, {user?.firstName}!
+          Welcome, {(user?.user_metadata?.first_name as string) || user?.email?.split("@")[0]}!
         </h1>
         <p className="text-slate-600 max-w-md mb-8">
           You're just one step away from tracking your impact. Let's create your organization profile first.

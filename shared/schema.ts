@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, varchar, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, date } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -23,7 +23,7 @@ export const organizations = pgTable("organizations", {
 
 export const userRoles = pgTable("user_roles", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   orgId: integer("org_id").notNull().references(() => organizations.id),
   role: text("role", { enum: ["admin", "can_edit", "can_view", "can_view_download"] }).notNull().default("can_view"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -59,7 +59,7 @@ export const impactMetrics = pgTable("impact_metrics", {
 export const impactEntries = pgTable("impact_entries", {
   id: serial("id").primaryKey(),
   programId: integer("program_id").notNull().references(() => programs.id),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: uuid("user_id").notNull().references(() => users.id),
   date: date("date").notNull(),
   geographyLevel: text("geography_level", { enum: ["SPA", "City", "County", "State"] }).notNull(),
   geographyValue: text("geography_value").notNull(),

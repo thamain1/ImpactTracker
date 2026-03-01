@@ -3,7 +3,7 @@ import type { Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
+import { requireAuth } from "./auth";
 import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from "./services/census";
 import { expandGeographies, getParentGeographies } from "./services/geography";
 import OpenAI from "openai";
@@ -48,22 +48,33 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
-  await setupAuth(app);
-  registerAuthRoutes(app);
+
+  // === Auth ===
+  app.get("/api/auth/user", requireAuth, async (req, res) => {
+    const supabaseUser = req.user!;
+    const userData = {
+      id: supabaseUser.id,
+      email: supabaseUser.email ?? null,
+      firstName: (supabaseUser.user_metadata?.first_name as string) ?? null,
+      lastName: (supabaseUser.user_metadata?.last_name as string) ?? null,
+      profileImageUrl: (supabaseUser.user_metadata?.avatar_url as string) ?? null,
+    };
+    const user = await storage.upsertUser(userData);
+    res.json(user);
+  });
 
   // === Organizations ===
-  app.get(api.organizations.list.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.organizations.list.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const orgs = await storage.getOrganizationsForUser(userId);
     res.json(orgs);
   });
 
-  app.post(api.organizations.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.organizations.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.organizations.create.input.parse(req.body);
       const org = await storage.createOrganization(input);
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       await storage.createUserRole(org.id, userId, "admin");
       res.status(201).json(org);
     } catch (err) {
@@ -74,8 +85,8 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.organizations.get.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.organizations.get.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const orgId = Number(req.params.id);
     if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
     const org = await storage.getOrganization(orgId);
@@ -83,9 +94,9 @@ export async function registerRoutes(
     res.json(org);
   });
 
-  app.put(api.organizations.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.organizations.update.path, requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       const orgId = Number(req.params.id);
       if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.organizations.update.input.parse(req.body);
@@ -101,17 +112,17 @@ export async function registerRoutes(
   });
 
   // === User Roles ===
-  app.get(api.userRoles.list.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.userRoles.list.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const orgId = Number(req.params.orgId);
     if (!(await userOwnsOrg(userId, orgId))) return res.status(403).json({ message: "Not authorized" });
     const roles = await storage.getUserRoles(orgId);
     res.json(roles);
   });
 
-  app.post(api.userRoles.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.userRoles.create.path, requireAuth, async (req, res) => {
     try {
-      const currentUserId = (req.user as any).claims.sub;
+      const currentUserId = req.user!.id;
       const orgId = Number(req.params.orgId);
       if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.userRoles.create.input.parse(req.body);
@@ -129,9 +140,9 @@ export async function registerRoutes(
     }
   });
 
-  app.put(api.userRoles.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.userRoles.update.path, requireAuth, async (req, res) => {
     try {
-      const currentUserId = (req.user as any).claims.sub;
+      const currentUserId = req.user!.id;
       const orgId = Number(req.params.orgId);
       if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.userRoles.update.input.parse(req.body);
@@ -151,8 +162,8 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.userRoles.delete.path, isAuthenticated, async (req, res) => {
-    const currentUserId = (req.user as any).claims.sub;
+  app.delete(api.userRoles.delete.path, requireAuth, async (req, res) => {
+    const currentUserId = req.user!.id;
     const orgId = Number(req.params.orgId);
     if (!(await userOwnsOrg(currentUserId, orgId))) return res.status(403).json({ message: "Not authorized" });
     const roleId = Number(req.params.id);
@@ -166,8 +177,8 @@ export async function registerRoutes(
   });
 
   // === Programs ===
-  app.get(api.programs.list.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.programs.list.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     if (req.query.orgId) {
       const orgId = Number(req.query.orgId);
       const userOrgs = await storage.getOrganizationsForUser(userId);
@@ -187,9 +198,9 @@ export async function registerRoutes(
     res.json(allProgs);
   });
 
-  app.post(api.programs.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.programs.create.path, requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       const input = api.programs.create.input.parse(req.body);
       if (!(await userOwnsOrg(userId, input.orgId))) return res.status(403).json({ message: "Not authorized" });
       const { metrics, ...programData } = input;
@@ -204,8 +215,8 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.programs.get.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.programs.get.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const programId = Number(req.params.id);
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     const program = await storage.getProgram(programId);
@@ -213,9 +224,9 @@ export async function registerRoutes(
     res.json(program);
   });
 
-  app.put(api.programs.update.path, isAuthenticated, async (req, res) => {
+  app.put(api.programs.update.path, requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       const programId = Number(req.params.id);
       if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
       const input = api.programs.update.input.parse(req.body);
@@ -230,8 +241,8 @@ export async function registerRoutes(
     }
   });
 
-  app.delete(api.programs.delete.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.delete(api.programs.delete.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const programId = Number(req.params.id);
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     await storage.deleteProgram(programId);
@@ -239,8 +250,8 @@ export async function registerRoutes(
   });
 
   // === Metrics ===
-  app.post("/api/programs/:programId/metrics", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.post("/api/programs/:programId/metrics", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const programId = Number(req.params.programId);
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     try {
@@ -255,8 +266,8 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.patch("/api/programs/:programId/metrics/:id", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const programId = Number(req.params.programId);
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     try {
@@ -276,8 +287,8 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/programs/:programId/metrics/:id", isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.delete("/api/programs/:programId/metrics/:id", requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const programId = Number(req.params.programId);
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     await storage.deleteImpactMetric(Number(req.params.id));
@@ -285,19 +296,19 @@ export async function registerRoutes(
   });
 
   // === Impact ===
-  app.get(api.impact.list.path, isAuthenticated, async (req, res) => {
+  app.get(api.impact.list.path, requireAuth, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
-    const userId = (req.user as any).claims.sub;
+    const userId = req.user!.id;
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
     const entries = await storage.getImpactEntries(programId, req.query.geographyLevel as string);
     res.json(entries);
   });
 
-  app.post(api.impact.create.path, isAuthenticated, async (req, res) => {
+  app.post(api.impact.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.impact.create.input.parse(req.body);
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       if (!(await userOwnsProgram(userId, input.programId))) return res.status(403).json({ message: "Not authorized" });
       const entry = await storage.createImpactEntry({ ...input, userId });
       res.status(201).json(entry);
@@ -309,10 +320,10 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/impact/:id", isAuthenticated, async (req, res) => {
+  app.put("/api/impact/:id", requireAuth, async (req, res) => {
     try {
       const id = Number(req.params.id);
-      const userId = String((req.user as any)?.claims?.sub);
+      const userId = req.user!.id;
       const allEntries = await storage.getAllImpactEntries();
       const existing = allEntries.find(e => e.id === id);
       if (!existing) return res.status(404).json({ message: "Impact entry not found" });
@@ -338,16 +349,16 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.impact.stats.path, isAuthenticated, async (req, res) => {
+  app.get(api.impact.stats.path, requireAuth, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
-    const userId = (req.user as any).claims.sub;
+    const userId = req.user!.id;
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
 
     const entries = await storage.getImpactEntries(programId);
-    
+
     const aggregation: Record<string, Record<string, Record<string, number>>> = {};
-    
+
     function addToAggregation(level: string, value: string, metrics: Record<string, number>) {
       if (!value) return;
       if (!aggregation[level]) aggregation[level] = {};
@@ -361,16 +372,16 @@ export async function registerRoutes(
       const level = entry.geographyLevel;
       const value = entry.geographyValue;
       const metrics = entry.metricValues as Record<string, number>;
-      
+
       addToAggregation(level, value, metrics);
-      
+
       const parents = getParentGeographies(level, value);
       parents.forEach(parent => {
         addToAggregation(parent.level, parent.value, metrics);
       });
     });
 
-    const stats: any[] = [];
+    const stats: unknown[] = [];
     Object.entries(aggregation).forEach(([level, values]) => {
       Object.entries(values).forEach(([geoVal, metrics]) => {
         stats.push({ geographyLevel: level, geographyValue: geoVal, metrics });
@@ -381,10 +392,10 @@ export async function registerRoutes(
   });
 
   // === CSV Export ===
-  app.get(api.impact.exportCsv.path, isAuthenticated, async (req, res) => {
+  app.get(api.impact.exportCsv.path, requireAuth, async (req, res) => {
     const programId = Number(req.query.programId);
     if (isNaN(programId)) return res.status(400).json({ message: "programId is required" });
-    const userId = (req.user as any).claims.sub;
+    const userId = req.user!.id;
     if (!(await userOwnsProgram(userId, programId))) return res.status(403).json({ message: "Not authorized" });
 
     const program = await storage.getProgram(programId);
@@ -392,7 +403,7 @@ export async function registerRoutes(
 
     const entries = await storage.getImpactEntries(programId);
     const metricNames = program.metrics.map(m => m.name);
-    
+
     const header = ["Date", "Geography Level", "Geography Value", "ZIP Code", "Demographics", "Outcomes", ...metricNames].join(",");
     const rows = entries.map(entry => {
       const mv = entry.metricValues as Record<string, number>;
@@ -415,9 +426,9 @@ export async function registerRoutes(
   });
 
   // === Census ===
-  app.get(api.census.comparison.path, isAuthenticated, async (req, res) => {
+  app.get(api.census.comparison.path, requireAuth, async (req, res) => {
     try {
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       const userOrgs = await storage.getOrganizationsForUser(userId);
       const userOrgIds = new Set(userOrgs.map(o => o.id));
       const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
@@ -434,7 +445,7 @@ export async function registerRoutes(
       });
 
       const orgProgramIds = new Set(allPrograms.map(p => p.id));
-      let allEntries = (await storage.getAllImpactEntries()).filter(e => orgProgramIds.has(e.programId));
+      const allEntries = (await storage.getAllImpactEntries()).filter(e => orgProgramIds.has(e.programId));
 
       const rawGeographies: { level: string; value: string }[] = [];
       const seen = new Set<string>();
@@ -488,7 +499,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get(api.census.lookup.path, isAuthenticated, async (req, res) => {
+  app.get(api.census.lookup.path, requireAuth, async (req, res) => {
     const level = req.query.level as string;
     const value = req.query.value as string;
     if (!level || !value) return res.status(400).json({ message: "level and value are required" });
@@ -497,7 +508,7 @@ export async function registerRoutes(
     res.json(result);
   });
 
-  app.post(api.census.batch.path, isAuthenticated, async (req, res) => {
+  app.post(api.census.batch.path, requireAuth, async (req, res) => {
     try {
       const input = api.census.batch.input.parse(req.body);
       const results = await getCensusForGeographies(input.geographies);
@@ -510,7 +521,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post(api.census.ageGroups.path, isAuthenticated, async (req, res) => {
+  app.post(api.census.ageGroups.path, requireAuth, async (req, res) => {
     try {
       const input = api.census.ageGroups.input.parse(req.body);
       const results = await getCensusAgeGroups(input.geographies, input.ageMin, input.ageMax);
@@ -524,10 +535,10 @@ export async function registerRoutes(
   });
 
   // === Dashboard Charts ===
-  app.get(api.dashboard.charts.path, isAuthenticated, async (req, res) => {
+  app.get(api.dashboard.charts.path, requireAuth, async (req, res) => {
     try {
       const currentYear = new Date().getFullYear();
-      const userId = (req.user as any).claims.sub;
+      const userId = req.user!.id;
       const userOrgs = await storage.getOrganizationsForUser(userId);
       const userOrgIds = new Set(userOrgs.map(o => o.id));
       const orgId = req.query.orgId ? Number(req.query.orgId) : undefined;
@@ -638,13 +649,12 @@ export async function registerRoutes(
   });
 
   // === Admin Stats ===
-  app.get(api.admin.stats.path, isAuthenticated, async (req, res) => {
-    const userId = (req.user as any).claims.sub;
+  app.get(api.admin.stats.path, requireAuth, async (req, res) => {
+    const userId = req.user!.id;
     const userOrgs = await storage.getOrganizationsForUser(userId);
     if (userOrgs.length === 0) {
       return res.json({ totalOrganizations: 0, totalPrograms: 0, totalEntries: 0, byGeography: [], recentPrograms: [] });
     }
-    const userOrgIds = new Set(userOrgs.map(o => o.id));
     const allPrograms = (await Promise.all(userOrgs.map(o => storage.getPrograms(o.id)))).flat();
     const programIds = new Set(allPrograms.map(p => p.id));
     const allEntries = (await storage.getAllImpactEntries()).filter(e => programIds.has(e.programId));
@@ -675,7 +685,7 @@ export async function registerRoutes(
   });
 
   // === AI Report Generation ===
-  app.post("/api/report/ai-narrative", isAuthenticated, async (req, res) => {
+  app.post("/api/report/ai-narrative", requireAuth, async (req, res) => {
     try {
       if (!process.env.OPENAI_API_KEY) {
         return res.status(400).json({ message: "OpenAI API key not configured" });
@@ -694,9 +704,9 @@ export async function registerRoutes(
       const targetPopulation = body.targetPopulation || body.program?.targetPopulation || "";
       const goals = body.goals || body.program?.goals || "";
       const totalParticipants = body.totalParticipants || body.totalPrimary || 0;
-      const participantMetrics = (body.program?.metrics || []).filter((m: any) => m.countsAsParticipant !== false);
-      const primaryMetricName = body.primaryMetricName || (participantMetrics.length > 0 ? participantMetrics.map((m: any) => m.name).join(", ") : body.program?.metrics?.[0]?.name || "Participants");
-      const geographies = body.geographies || (body.stats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).join(", ");
+      const participantMetrics = (body.program?.metrics || []).filter((m: { countsAsParticipant?: boolean }) => m.countsAsParticipant !== false);
+      const primaryMetricName = body.primaryMetricName || (participantMetrics.length > 0 ? participantMetrics.map((m: { name: string }) => m.name).join(", ") : body.program?.metrics?.[0]?.name || "Participants");
+      const geographies = body.geographies || (body.stats || []).map((s: { geographyValue: string; geographyLevel: string }) => `${s.geographyValue} (${s.geographyLevel})`).join(", ");
       const totalCost = body.totalCost || body.program?.totalCost || 0;
       const costPerParticipant = body.program?.costPerParticipant || (totalParticipants > 0 && totalCost > 0 ? (totalCost / totalParticipants).toFixed(2) : null);
 
@@ -744,110 +754,12 @@ Generate a JSON response with these sections (each should be 2-4 paragraphs of r
 
       const narrative = JSON.parse(content);
       res.json(narrative);
-    } catch (error: any) {
-      console.error("AI report generation error:", error.message);
-      res.status(500).json({ message: "Failed to generate AI narrative: " + error.message });
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      console.error("AI report generation error:", msg);
+      res.status(500).json({ message: "Failed to generate AI narrative: " + msg });
     }
   });
 
-  // Seed
-  await seedDatabase();
-
   return httpServer;
-}
-
-async function seedDatabase() {
-  const existingOrgs = await storage.getOrganizations();
-  if (existingOrgs.length === 0) {
-    console.log("Seeding database...");
-    const org = await storage.createOrganization({ 
-      name: "Demo Nonprofit", 
-      slug: "demo-nonprofit",
-      address: "123 Main St, Los Angeles, CA 90012",
-      phone: "(213) 555-0100",
-      website: "https://demo-nonprofit.org",
-      contactEmail: "info@demo-nonprofit.org",
-    });
-    
-    await storage.createProgram({
-      orgId: org.id,
-      name: "Community Food Bank",
-      description: "Providing meals to families in need across LA County.",
-      type: "Food Security",
-      status: "active",
-      startDate: "2024-01-01",
-      endDate: null,
-      targetPopulation: "Low-income families",
-      goals: "Serve 10,000 meals per quarter across all SPAs",
-      locations: "Los Angeles County",
-    }, [
-      { name: "Meals Served", unit: "meals", programId: 0 },
-      { name: "Families Assisted", unit: "families", programId: 0 }
-    ]);
-
-    await storage.createProgram({
-      orgId: org.id,
-      name: "Youth Mentorship Program",
-      description: "Connecting at-risk youth with professional mentors for career guidance.",
-      type: "Education",
-      status: "active",
-      startDate: "2024-03-15",
-      endDate: null,
-      targetPopulation: "Youth ages 14-21",
-      targetAgeMin: 14,
-      targetAgeMax: 21,
-      goals: "Match 200 mentees with mentors annually",
-      locations: "SPA 6, SPA 8",
-    }, [
-      { name: "Youth Enrolled", unit: "students", programId: 0 },
-      { name: "Mentor Hours", unit: "hours", programId: 0 },
-      { name: "Graduations", unit: "students", programId: 0 }
-    ]);
-
-    const allPrograms = await storage.getPrograms(org.id);
-    const foodBankId = allPrograms.find(p => p.name === "Community Food Bank")?.id;
-    const youthId = allPrograms.find(p => p.name === "Youth Mentorship Program")?.id;
-
-    if (foodBankId) {
-      const seedUserId = "seed-demo-user";
-      await storage.upsertUser({ id: seedUserId, email: "demo@demo-nonprofit.org", firstName: "Demo", lastName: "User" });
-
-      await storage.createImpactEntry({
-        programId: foodBankId, userId: seedUserId, date: "2025-01-15",
-        geographyLevel: "County", geographyValue: "Los Angeles County",
-        zipCode: "90012", demographics: "Low-income families", outcomes: "Meals distributed",
-        metricValues: { "Meals Served": 2500, "Families Assisted": 400 },
-      });
-      await storage.createImpactEntry({
-        programId: foodBankId, userId: seedUserId, date: "2025-02-01",
-        geographyLevel: "SPA", geographyValue: "SPA 6",
-        zipCode: "90003", demographics: "Underserved communities", outcomes: "Food access improved",
-        metricValues: { "Meals Served": 1800, "Families Assisted": 280 },
-      });
-      await storage.createImpactEntry({
-        programId: foodBankId, userId: seedUserId, date: "2025-01-20",
-        geographyLevel: "City", geographyValue: "Los Angeles",
-        zipCode: "90015", demographics: "Urban residents", outcomes: "Nutritional support",
-        metricValues: { "Meals Served": 3200, "Families Assisted": 520 },
-      });
-      await storage.createImpactEntry({
-        programId: foodBankId, userId: seedUserId, date: "2025-01-25",
-        geographyLevel: "State", geographyValue: "California",
-        zipCode: "90001", demographics: "Statewide", outcomes: "Food security initiative",
-        metricValues: { "Meals Served": 8500, "Families Assisted": 1200 },
-      });
-    }
-
-    if (youthId) {
-      const seedUserId = "seed-demo-user";
-      await storage.createImpactEntry({
-        programId: youthId, userId: seedUserId, date: "2025-01-10",
-        geographyLevel: "SPA", geographyValue: "SPA 8",
-        zipCode: "90802", demographics: "Youth 14-21", outcomes: "Career guidance sessions",
-        metricValues: { "Youth Enrolled": 45, "Mentor Hours": 180, "Graduations": 12 },
-      });
-    }
-
-    console.log("Database seeded with initial data and sample impact entries.");
-  }
 }

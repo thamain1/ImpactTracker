@@ -98,16 +98,16 @@ export function SidebarNav() {
 
       <div className="p-4 border-t border-slate-800 bg-slate-950/50">
         <div className="flex items-center gap-3 mb-4 px-2">
-          {user?.profileImageUrl ? (
-            <img src={user.profileImageUrl} alt={user.firstName || "User"} className="w-8 h-8 rounded-full ring-2 ring-slate-800" />
+          {user?.user_metadata?.avatar_url ? (
+            <img src={user.user_metadata.avatar_url as string} alt={(user.user_metadata?.first_name as string) || "User"} className="w-8 h-8 rounded-full ring-2 ring-slate-800" />
           ) : (
             <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center font-bold text-xs text-slate-300">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
+              {(user?.user_metadata?.first_name as string)?.[0]}{(user?.user_metadata?.last_name as string)?.[0]}
             </div>
           )}
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-white truncate">
-              {user?.firstName} {user?.lastName}
+              {(user?.user_metadata?.first_name as string) || ""} {(user?.user_metadata?.last_name as string) || ""}
             </p>
             <p className="text-xs text-slate-500 truncate">{user?.email}</p>
           </div>

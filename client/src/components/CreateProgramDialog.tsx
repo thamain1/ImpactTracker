@@ -102,7 +102,7 @@ export function CreateProgramDialog({ orgId }: CreateProgramDialogProps) {
                   type="button" 
                   variant="outline" 
                   size="sm"
-                  onClick={() => append({ name: "", unit: "" })}
+                  onClick={() => append({ name: "", unit: "", countsAsParticipant: true })}
                 >
                   <Plus className="w-3 h-3 mr-2" /> Add Metric
                 </Button>
