@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, EyeOff, MapPin, Plus, Lock } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, EyeOff, MapPin, Plus, Lock, User } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { api, buildUrl } from "@shared/routes";
 
@@ -60,6 +60,32 @@ export default function Settings() {
   const [changingPassword, setChangingPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [profileForm, setProfileForm] = useState({ firstName: "", lastName: "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setProfileForm({
+          firstName: user.user_metadata?.first_name || "",
+          lastName: user.user_metadata?.last_name || "",
+        });
+      }
+    });
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    const { error } = await supabase.auth.updateUser({
+      data: { first_name: profileForm.firstName, last_name: profileForm.lastName },
+    });
+    setSavingProfile(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Profile updated", description: "Your name has been saved." });
+    }
+  };
 
   const handleChangePassword = async () => {
     if (!newPassword || newPassword.length < 6) {
@@ -176,6 +202,39 @@ export default function Settings() {
         <h1 className="text-3xl font-heading font-bold text-slate-900" data-testid="text-settings-title">Settings</h1>
         <p className="text-muted-foreground mt-1">Manage your organization profile and team members.</p>
       </div>
+
+      {/* Your Profile */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <User className="w-4 h-4" /> Your Profile
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>First Name</Label>
+              <Input
+                value={profileForm.firstName}
+                onChange={e => setProfileForm(f => ({ ...f, firstName: e.target.value }))}
+                placeholder="First name"
+              />
+            </div>
+            <div>
+              <Label>Last Name</Label>
+              <Input
+                value={profileForm.lastName}
+                onChange={e => setProfileForm(f => ({ ...f, lastName: e.target.value }))}
+                placeholder="Last name"
+              />
+            </div>
+          </div>
+          <Button onClick={handleSaveProfile} disabled={savingProfile}>
+            {savingProfile ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Save Name
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Organization Profile */}
       <Card>
