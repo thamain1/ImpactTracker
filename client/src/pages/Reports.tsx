@@ -246,8 +246,16 @@ export default function Reports() {
     }, 0);
   }, [entries, participantMetricNames]);
 
-  const handleCsvDownload = () => {
-    window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank");
+  const handleCsvDownload = async () => {
+    const res = await apiRequest("GET", `${api.impact.exportCsv.path}?programId=${programId}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `impact_report_${programId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const pdfReady = !!(selectedProgram && orgs?.[0] && filteredStats && entries && !statsLoading);

@@ -23,6 +23,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 
 export default function ProgramDetails() {
@@ -143,7 +144,17 @@ export default function ProgramDetails() {
             </Link>
             <Button
               variant="outline"
-              onClick={() => window.open(`${api.impact.exportCsv.path}?programId=${programId}`, "_blank")}
+              onClick={async () => {
+                const res = await apiRequest("GET", `${api.impact.exportCsv.path}?programId=${programId}`);
+                if (!res.ok) return;
+                const blob = await res.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `impact_report_${programId}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
               data-testid="button-export-csv"
             >
               <Download className="w-4 h-4 mr-2" />
