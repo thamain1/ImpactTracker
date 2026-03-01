@@ -289,29 +289,24 @@ app.post("/api/organizations/:orgId/roles", async (c) => {
     const input = roleCreateSchema.parse(body);
     let { data: targetUser } = await supabase
       .from("users").select("id").eq("email", input.email).maybeSingle();
-    let inviteUrl: string | null = null;
     if (!targetUser) {
-      // Generate invite link (no email sent — avoids rate limits)
-      const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
-        type: "invite",
-        email: input.email,
-      });
-      if (linkErr) {
+      // Invite new user — sends them an email with a link to set their password
+      const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(input.email);
+      if (inviteErr) {
         // User already exists in auth but not our users table — sync them
         const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
         const existing = (listData?.users ?? []).find((u: any) => u.email === input.email);
-        if (!existing) return c.json({ message: linkErr.message }, 400);
+        if (!existing) return c.json({ message: inviteErr.message }, 400);
         await supabase.from("users").upsert({ id: existing.id, email: existing.email }, { onConflict: "id" });
         targetUser = { id: existing.id };
       } else {
-        await supabase.from("users").upsert({ id: linkData.user.id, email: linkData.user.email }, { onConflict: "id" });
-        targetUser = { id: linkData.user.id };
-        inviteUrl = linkData.properties.action_link;
+        await supabase.from("users").upsert({ id: invited.user.id, email: invited.user.email }, { onConflict: "id" });
+        targetUser = { id: invited.user.id };
       }
     }
     const { data: role } = await supabase
       .from("user_roles").insert({ org_id: orgId, user_id: targetUser.id, role: input.role }).select().single();
-    return c.json({ ...toCamel(role), inviteUrl }, 201);
+    return c.json(toCamel(role), 201);
   } catch (err) {
     if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
     throw err;

@@ -25,18 +25,9 @@ export function useAddUserRole(orgId: number) {
       const res = await apiRequest("POST", url, data);
       return res.json();
     },
-    onSuccess: (data: any) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations/roles", orgId] });
-      if (data?.inviteUrl) {
-        navigator.clipboard.writeText(data.inviteUrl).catch(() => {});
-        toast({
-          title: "Invite link copied!",
-          description: "The invite link has been copied to your clipboard. Share it with the new team member.",
-          duration: 8000,
-        });
-      } else {
-        toast({ title: "Success", description: "Team member added successfully." });
-      }
+      toast({ title: "Success", description: "Team member added successfully." });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
