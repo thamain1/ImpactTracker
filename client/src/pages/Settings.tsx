@@ -19,7 +19,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, MapPin, Plus } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, MapPin, Plus, Lock } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { api, buildUrl } from "@shared/routes";
 
 export default function Settings() {
@@ -53,6 +54,30 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [newArea, setNewArea] = useState({ name: "", lat: "", lng: "", description: "" });
   const [seedingAreas, setSeedingAreas] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast({ title: "Error", description: "Password must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "Error", description: "Passwords do not match.", variant: "destructive" });
+      return;
+    }
+    setChangingPassword(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setChangingPassword(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setNewPassword("");
+      setConfirmPassword("");
+      toast({ title: "Password updated", description: "Your password has been changed." });
+    }
+  };
 
   useEffect(() => {
     if (org) {
@@ -542,6 +567,39 @@ export default function Settings() {
           ) : (
             <p className="text-sm text-muted-foreground text-center py-4">No team members assigned yet.</p>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Change Password */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Lock className="w-4 h-4" /> Change Password
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label>New Password</Label>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 6 characters"
+            />
+          </div>
+          <div>
+            <Label>Confirm Password</Label>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter new password"
+            />
+          </div>
+          <Button onClick={handleChangePassword} disabled={changingPassword}>
+            {changingPassword ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            Update Password
+          </Button>
         </CardContent>
       </Card>
     </div>
