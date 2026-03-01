@@ -396,8 +396,6 @@ export default function Reports() {
         <>
           {/* Summary Cards */}
           {filteredStats && filteredStats.length > 0 && (() => {
-            const spaEntries = filteredStats.filter(s => s.geographyLevel === "SPA");
-
             // Helper: sum participant metrics for a single stat entry
             const entryTotal = (s: typeof filteredStats[0]) => {
               let t = 0;
@@ -405,26 +403,29 @@ export default function Reports() {
               return t;
             };
 
-            // Geo card (City / County / State — aggregated per level)
-            const GeoCard = ({ level }: { level: string }) => {
-              const levelStats = filteredStats.filter(s => s.geographyLevel === level);
-              if (levelStats.length === 0) return null;
-              const total = levelStats.reduce((sum, s) => sum + entryTotal(s), 0);
-              const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
-              const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
-              const reachPct = levelPop > 0 && total > 0
-                ? Math.round((total / levelPop) * 10000) / 100 : null;
+            // One reusable card for any named geographic value (SPA, City, County, State)
+            const GeoValueCard = ({ stat }: { stat: typeof filteredStats[0] }) => {
+              const total = entryTotal(stat);
+              const census = censusData?.find(
+                c => c.geographyLevel === stat.geographyLevel && c.geographyValue === stat.geographyValue
+              );
+              const pop = census?.totalPopulation || 0;
+              const reachPct = pop > 0 && total > 0
+                ? Math.round((total / pop) * 10000) / 100 : null;
               return (
-                <Card data-testid={`geo-card-${level.toLowerCase()}`}>
+                <Card data-testid={`geo-card-${stat.geographyLevel.toLowerCase()}-${stat.geographyValue.replace(/\s+/g, "-").toLowerCase()}`}>
                   <CardContent className="p-4">
-                    <p className="text-xs text-muted-foreground font-medium uppercase">{level}</p>
+                    <p className="text-xs text-muted-foreground font-medium uppercase">{stat.geographyLevel}</p>
+                    <p className="text-sm font-semibold text-slate-700 mt-0.5 leading-tight truncate" title={stat.geographyValue}>
+                      {stat.geographyValue}
+                    </p>
                     <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
                     <p className="text-xs text-muted-foreground">Participants</p>
-                    {levelPop > 0 && (
+                    {pop > 0 && (
                       <div className="mt-2 pt-2 border-t space-y-1">
                         <div className="flex items-center justify-between gap-2 text-xs">
                           <span className="text-muted-foreground">Population</span>
-                          <span className="font-semibold text-slate-700">{levelPop.toLocaleString()}</span>
+                          <span className="font-semibold text-slate-700">{pop.toLocaleString()}</span>
                         </div>
                         {reachPct !== null && (
                           <div>
@@ -445,11 +446,15 @@ export default function Reports() {
               );
             };
 
+            const spaEntries    = filteredStats.filter(s => s.geographyLevel === "SPA");
+            const cityEntries   = filteredStats.filter(s => s.geographyLevel === "City");
+            const countyEntries = filteredStats.filter(s => s.geographyLevel === "County");
+            const stateEntries  = filteredStats.filter(s => s.geographyLevel === "State");
+
             return (
               <div className="space-y-3">
                 {/* Row 1: Total + individual SPA cards */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  {/* Total participants — direct entry sum, always matches goal vs actual */}
                   <Card data-testid="geo-card-total" className="border-primary/30 bg-primary/5">
                     <CardContent className="p-4">
                       <p className="text-xs text-primary font-medium uppercase">Total</p>
@@ -459,54 +464,23 @@ export default function Reports() {
                       <p className="text-xs text-muted-foreground">Participants Served</p>
                     </CardContent>
                   </Card>
-
-                  {/* One card per SPA */}
-                  {spaEntries.map(spa => {
-                    const total = entryTotal(spa);
-                    const spaCensus = censusData?.find(
-                      c => c.geographyLevel === "SPA" && c.geographyValue === spa.geographyValue
-                    );
-                    const spaPop = spaCensus?.totalPopulation || 0;
-                    const reachPct = spaPop > 0 && total > 0
-                      ? Math.round((total / spaPop) * 10000) / 100 : null;
-                    return (
-                      <Card key={spa.geographyValue} data-testid={`geo-card-spa-${spa.geographyValue.replace(/\s+/g, "-").toLowerCase()}`}>
-                        <CardContent className="p-4">
-                          <p className="text-xs text-muted-foreground font-medium uppercase">{spa.geographyValue}</p>
-                          <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
-                          <p className="text-xs text-muted-foreground">Participants</p>
-                          {spaPop > 0 && (
-                            <div className="mt-2 pt-2 border-t space-y-1">
-                              <div className="flex items-center justify-between gap-2 text-xs">
-                                <span className="text-muted-foreground">Population</span>
-                                <span className="font-semibold text-slate-700">{spaPop.toLocaleString()}</span>
-                              </div>
-                              {reachPct !== null && (
-                                <div>
-                                  <div className="flex items-center justify-between gap-2 text-xs mb-1">
-                                    <span className="text-muted-foreground">Reach</span>
-                                    <span className="font-semibold text-emerald-600">{reachPct}%</span>
-                                  </div>
-                                  <div className="w-full bg-slate-100 rounded-full h-1.5">
-                                    <div className="bg-primary rounded-full h-1.5 transition-all"
-                                      style={{ width: `${Math.min(reachPct, 100)}%` }} />
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
+                  {spaEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
                 </div>
 
-                {/* Row 2: City / County / State */}
-                <div className="grid grid-cols-3 gap-4">
-                  <GeoCard level="City" />
-                  <GeoCard level="County" />
-                  <GeoCard level="State" />
-                </div>
+                {/* City cards — one per named city */}
+                {cityEntries.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {cityEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                  </div>
+                )}
+
+                {/* County + State cards — one per named value */}
+                {(countyEntries.length > 0 || stateEntries.length > 0) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    {countyEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                    {stateEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                  </div>
+                )}
               </div>
             );
           })()}
