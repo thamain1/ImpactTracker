@@ -7,6 +7,7 @@ import { requireAuth } from "./auth";
 import { getCensusComparison, getCensusForGeographies, getCensusAgeGroups } from "./services/census";
 import { expandGeographies, getParentGeographies } from "./services/geography";
 import { generateNarrative } from "./services/geminiReport";
+import { resolveZipCode } from "./services/zipLookup";
 
 async function getUserOrgIds(userId: string): Promise<Set<number>> {
   const orgs = await storage.getOrganizationsForUser(userId);
@@ -305,12 +306,25 @@ export async function registerRoutes(
     res.json(entries);
   });
 
+  // Zip code geography resolution
+  app.get("/api/zipcode/:zip", requireAuth, async (req, res) => {
+    const zip = (req.params.zip as string).trim();
+    if (!/^\d{5}$/.test(zip)) {
+      return res.status(400).json({ message: "Invalid ZIP code — must be 5 digits" });
+    }
+    const context = await resolveZipCode(zip);
+    if (!context) return res.status(404).json({ message: "ZIP code not recognized" });
+    res.json(context);
+  });
+
   app.post(api.impact.create.path, requireAuth, async (req, res) => {
     try {
       const input = api.impact.create.input.parse(req.body);
       const userId = req.user!.id;
       if (!(await userOwnsProgram(userId, input.programId))) return res.status(403).json({ message: "Not authorized" });
-      const entry = await storage.createImpactEntry({ ...input, userId });
+      // Auto-resolve zip code to geographic context
+      const geoContext = input.zipCode ? await resolveZipCode(input.zipCode) : null;
+      const entry = await storage.createImpactEntry({ ...input, userId, geoContext });
       res.status(201).json(entry);
     } catch (err) {
       if (err instanceof z.ZodError) {
@@ -337,7 +351,12 @@ export async function registerRoutes(
       const input = api.impact.update.input.parse(req.body);
       const cleanInput = Object.fromEntries(
         Object.entries(input).filter(([_, v]) => v !== undefined)
-      );
+      ) as Record<string, unknown>;
+      // Re-resolve zip if it changed
+      const zipToResolve = cleanInput.zipCode as string | undefined;
+      if (zipToResolve !== undefined) {
+        cleanInput.geoContext = zipToResolve ? await resolveZipCode(zipToResolve) : null;
+      }
       const updated = await storage.updateImpactEntry(id, cleanInput);
       if (!updated) return res.status(404).json({ message: "Impact entry not found" });
       res.json(updated);
@@ -369,14 +388,21 @@ export async function registerRoutes(
     }
 
     entries.forEach(entry => {
-      const level = entry.geographyLevel;
-      const value = entry.geographyValue;
       const metrics = entry.metricValues as Record<string, number>;
+      const ctx = entry.geoContext as { spa?: string; city?: string; county?: string; state?: string } | null;
 
-      // Each entry counts only at the level it was explicitly logged.
-      // No automatic parent rollup here — that prevents double-counting when entries
-      // exist at multiple geographic levels (e.g. SPA + County for the same program).
-      addToAggregation(level, value, metrics);
+      if (ctx && Object.keys(ctx).length > 0) {
+        // Zip-resolved entry: count the same participants at every derived geographic level.
+        // This is correct — 100 people in SPA 6 ARE also 100 people in LA County.
+        // The total participants count (direct entry sum) is unaffected.
+        if (ctx.spa)    addToAggregation("SPA",    ctx.spa,    metrics);
+        if (ctx.city)   addToAggregation("City",   ctx.city,   metrics);
+        if (ctx.county) addToAggregation("County", ctx.county, metrics);
+        if (ctx.state)  addToAggregation("State",  ctx.state,  metrics);
+      } else {
+        // No zip resolution — count only at the manually selected level.
+        addToAggregation(entry.geographyLevel, entry.geographyValue, metrics);
+      }
     });
 
     const stats: unknown[] = [];

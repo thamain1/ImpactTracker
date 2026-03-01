@@ -64,6 +64,9 @@ export const impactEntries = pgTable("impact_entries", {
   geographyLevel: text("geography_level", { enum: ["SPA", "City", "County", "State"] }).notNull(),
   geographyValue: text("geography_value").notNull(),
   zipCode: text("zip_code"),
+  // Resolved geographic hierarchy derived from zipCode (populated on create/update when zip is provided)
+  // { spa?: string, city?: string, county?: string, state?: string }
+  geoContext: jsonb("geo_context"),
   demographics: text("demographics"),
   outcomes: text("outcomes"),
   metricValues: jsonb("metric_values").notNull(),

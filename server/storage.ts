@@ -36,8 +36,8 @@ export interface IStorage {
   deleteImpactMetric(id: number): Promise<void>;
 
   getImpactEntries(programId: number, geographyLevel?: string): Promise<ImpactEntry[]>;
-  createImpactEntry(entry: InsertImpactEntry & { userId: string }): Promise<ImpactEntry>;
-  updateImpactEntry(id: number, updates: Partial<InsertImpactEntry>): Promise<ImpactEntry | undefined>;
+  createImpactEntry(entry: InsertImpactEntry & { userId: string; geoContext?: unknown }): Promise<ImpactEntry>;
+  updateImpactEntry(id: number, updates: Partial<InsertImpactEntry> & { geoContext?: unknown }): Promise<ImpactEntry | undefined>;
   getAllImpactEntries(): Promise<ImpactEntry[]>;
 
   getServiceAreas(orgId: number): Promise<ServiceArea[]>;

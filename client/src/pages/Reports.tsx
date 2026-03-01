@@ -135,8 +135,17 @@ export default function Reports() {
 
     entries.forEach(entry => {
       const mv = entry.metricValues as Record<string, number>;
-      // Count only at the logged level — no parent rollup (avoids double-counting).
-      addToAgg(entry.geographyLevel, entry.geographyValue, mv);
+      const ctx = entry.geoContext as { spa?: string; city?: string; county?: string; state?: string } | null;
+      if (ctx && Object.keys(ctx).length > 0) {
+        // Zip-resolved: show the same participants at every derived geographic level
+        if (ctx.spa)    addToAgg("SPA",    ctx.spa,    mv);
+        if (ctx.city)   addToAgg("City",   ctx.city,   mv);
+        if (ctx.county) addToAgg("County", ctx.county, mv);
+        if (ctx.state)  addToAgg("State",  ctx.state,  mv);
+      } else {
+        // No zip resolution — count only at the manually selected level
+        addToAgg(entry.geographyLevel, entry.geographyValue, mv);
+      }
     });
     return Object.values(aggregation);
   }, [stats, entries, selectedYear]);

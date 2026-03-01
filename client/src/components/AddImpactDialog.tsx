@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertImpactEntrySchema } from "@shared/schema";
 import { useCreateImpactEntry } from "@/hooks/use-impact";
+import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,11 +12,18 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Plus, Loader2, Lightbulb } from "lucide-react";
+import { Plus, Loader2, Lightbulb, MapPin, CheckCircle2 } from "lucide-react";
 import type { ProgramResponse } from "@shared/routes";
 
 interface AddImpactDialogProps {
   program: ProgramResponse;
+}
+
+interface GeoContext {
+  spa?: string;
+  city?: string;
+  county?: string;
+  state?: string;
 }
 
 const formSchema = insertImpactEntrySchema.extend({
@@ -26,7 +34,7 @@ const formSchema = insertImpactEntrySchema.extend({
 });
 
 const GEO_SUGGESTIONS: Record<string, string[]> = {
-  SPA: ["SPA 1 - Antelope Valley", "SPA 2 - San Fernando", "SPA 3 - San Gabriel", "SPA 4 - Metro", "SPA 5 - West", "SPA 6 - South", "SPA 7 - East", "SPA 8 - South Bay"],
+  SPA: ["SPA 1", "SPA 2", "SPA 3", "SPA 4", "SPA 5", "SPA 6", "SPA 7", "SPA 8"],
   City: ["Los Angeles", "Long Beach", "Pasadena", "Santa Monica", "Glendale", "Burbank"],
   County: ["Los Angeles County", "Orange County", "San Bernardino County", "Riverside County", "Ventura County"],
   State: ["California", "Oregon", "Washington", "Arizona", "Nevada"],
@@ -36,14 +44,16 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
   const [open, setOpen] = useState(false);
   const createImpact = useCreateImpactEntry();
   const [metricInputs, setMetricInputs] = useState<Record<string, string>>({});
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [geoContext, setGeoContext] = useState<GeoContext | null>(null);
+  const [zipLooking, setZipLooking] = useState(false);
+  const zipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const form = useForm({
     resolver: zodResolver(formSchema),
     defaultValues: {
       programId: program.id,
       date: new Date().toISOString().split("T")[0],
-      geographyLevel: "City" as const,
+      geographyLevel: "City" as "SPA" | "City" | "County" | "State",
       geographyValue: "",
       zipCode: "",
       demographics: "",
@@ -53,7 +63,49 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
   });
 
   const geoLevel = form.watch("geographyLevel");
+  const zipValue = form.watch("zipCode");
   const suggestions = GEO_SUGGESTIONS[geoLevel] || [];
+
+  // Auto-resolve zip code as user types (debounced)
+  useEffect(() => {
+    if (zipTimer.current) clearTimeout(zipTimer.current);
+    const zip = (zipValue || "").replace(/\D/g, "");
+    if (zip.length !== 5) {
+      setGeoContext(null);
+      return;
+    }
+    zipTimer.current = setTimeout(async () => {
+      setZipLooking(true);
+      try {
+        const res = await apiRequest("GET", `/api/zipcode/${zip}`);
+        if (res.ok) {
+          const ctx: GeoContext = await res.json();
+          setGeoContext(ctx);
+          // Auto-fill geography: most specific level first (SPA > City > County > State)
+          if (ctx.spa) {
+            form.setValue("geographyLevel", "SPA");
+            form.setValue("geographyValue", ctx.spa);
+          } else if (ctx.city) {
+            form.setValue("geographyLevel", "City");
+            form.setValue("geographyValue", ctx.city);
+          } else if (ctx.county) {
+            form.setValue("geographyLevel", "County");
+            form.setValue("geographyValue", ctx.county);
+          } else if (ctx.state) {
+            form.setValue("geographyLevel", "State");
+            form.setValue("geographyValue", ctx.state);
+          }
+        } else {
+          setGeoContext(null);
+        }
+      } catch {
+        setGeoContext(null);
+      } finally {
+        setZipLooking(false);
+      }
+    }, 500);
+    return () => { if (zipTimer.current) clearTimeout(zipTimer.current); };
+  }, [zipValue, form]);
 
   const onSubmit = (values: any) => {
     const numericMetrics: Record<string, number> = {};
@@ -69,6 +121,7 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
           setOpen(false);
           form.reset();
           setMetricInputs({});
+          setGeoContext(null);
         },
       }
     );
@@ -92,7 +145,8 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5 mt-4">
-            {/* Date & Geography */}
+
+            {/* Date & ZIP Code */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -107,14 +161,56 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
                   </FormItem>
                 )}
               />
-              
+
+              <FormField
+                control={form.control}
+                name="zipCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
+                      ZIP Code
+                      {zipLooking && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                      {geoContext && !zipLooking && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="e.g. 90003"
+                        {...field}
+                        value={field.value || ""}
+                        maxLength={5}
+                        data-testid="input-zip"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Resolved context banner */}
+            {geoContext && (
+              <div className="flex flex-wrap gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                {[geoContext.spa, geoContext.city, geoContext.county, geoContext.state]
+                  .filter(Boolean)
+                  .map((v, i, arr) => (
+                    <span key={v}>
+                      {v}{i < arr.length - 1 ? " ·" : ""}
+                    </span>
+                  ))}
+              </div>
+            )}
+
+            {/* Geography (auto-filled from zip, editable) */}
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="geographyLevel"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Geography Level</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormLabel>Primary Level</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-geo-level">
                           <SelectValue placeholder="Select level" />
@@ -131,49 +227,37 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="geographyValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location Name</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. SPA 6" {...field} data-testid="input-geo-value" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
-            <FormField
-              control={form.control}
-              name="geographyValue"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Location Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. Los Angeles, SPA 6, etc." {...field} data-testid="input-geo-value" />
-                  </FormControl>
-                  {suggestions.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {suggestions.slice(0, 4).map(s => (
-                        <button
-                          key={s}
-                          type="button"
-                          className="text-xs px-2 py-0.5 bg-muted rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
-                          onClick={() => form.setValue("geographyValue", s)}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="zipCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ZIP Code (optional)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g. 90012" {...field} value={field.value || ""} data-testid="input-zip" />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Suggestions (when no zip resolved) */}
+            {!geoContext && suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1 -mt-3">
+                {suggestions.slice(0, 4).map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    className="text-xs px-2 py-0.5 bg-muted rounded-md text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
+                    onClick={() => form.setValue("geographyValue", s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Impact Metrics */}
             <div className="space-y-3 border-t pt-4">
@@ -235,7 +319,7 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
                     <FormLabel>Outcomes / Notes</FormLabel>
                     <FormControl>
                       <Textarea
-                        placeholder="e.g. 95% of participants reported improved food security; 3 families connected to housing resources"
+                        placeholder="e.g. 95% of participants reported improved food security"
                         {...field}
                         value={field.value || ""}
                         className="h-16"
