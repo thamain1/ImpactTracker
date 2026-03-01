@@ -83,16 +83,30 @@ const roleUpdateSchema = z.object({
   role: z.enum(["admin", "can_edit", "can_view", "can_view_download"]),
 });
 
+// ─── Health check (no auth) ───────────────────────────────────────────────────
+
+app.get("/api/health", (c) => {
+  return c.json({
+    ok: true,
+    hasSupabaseUrl: !!c.env?.SUPABASE_URL,
+    hasServiceKey: !!c.env?.SUPABASE_SERVICE_ROLE_KEY,
+  });
+});
+
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
 app.use("/api/*", async (c, next) => {
   const token = c.req.header("Authorization")?.replace("Bearer ", "");
   if (!token) return c.json({ message: "Unauthorized" }, 401);
-  const supabase = makeSupabase(c.env);
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) return c.json({ message: "Unauthorized" }, 401);
-  c.set("user", user);
-  await next();
+  try {
+    const supabase = makeSupabase(c.env);
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return c.json({ message: "Unauthorized" }, 401);
+    c.set("user", user);
+    await next();
+  } catch (err: any) {
+    return c.json({ message: err?.message ?? "Internal error in auth" }, 500);
+  }
 });
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
@@ -204,8 +218,9 @@ app.post("/api/organizations", async (c) => {
   try {
     const body = await c.req.json();
     const input = orgSchema.parse(body);
+    const slug = input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now();
     const { data: org, error } = await supabase
-      .from("organizations").insert(toSnake(input)).select().single();
+      .from("organizations").insert({ ...toSnake(input), slug }).select().single();
     if (error) throw error;
     await supabase.from("user_roles").insert({ org_id: org.id, user_id: user.id, role: "admin" });
     return c.json(toCamel(org), 201);
