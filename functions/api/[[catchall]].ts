@@ -78,6 +78,7 @@ const impactUpdateSchema = impactCreateSchema.partial();
 const roleCreateSchema = z.object({
   email: z.string().email(),
   role: z.enum(["admin", "can_edit", "can_view", "can_view_download"]),
+  password: z.string().min(6).optional(),
 });
 const roleUpdateSchema = z.object({
   role: z.enum(["admin", "can_edit", "can_view", "can_view_download"]),
@@ -290,18 +291,29 @@ app.post("/api/organizations/:orgId/roles", async (c) => {
     let { data: targetUser } = await supabase
       .from("users").select("id").eq("email", input.email).maybeSingle();
     if (!targetUser) {
-      // Invite new user — sends them an email with a link to set their password
-      const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(input.email);
-      if (inviteErr) {
-        // User already exists in auth but not our users table — sync them
-        const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-        const existing = (listData?.users ?? []).find((u: any) => u.email === input.email);
-        if (!existing) return c.json({ message: inviteErr.message }, 400);
-        await supabase.from("users").upsert({ id: existing.id, email: existing.email }, { onConflict: "id" });
-        targetUser = { id: existing.id };
+      if (input.password) {
+        // Create user directly with password — no email sent
+        const { data: created, error: createErr } = await supabase.auth.admin.createUser({
+          email: input.email,
+          password: input.password,
+          email_confirm: true,
+        });
+        if (createErr) return c.json({ message: createErr.message }, 400);
+        await supabase.from("users").upsert({ id: created.user.id, email: created.user.email }, { onConflict: "id" });
+        targetUser = { id: created.user.id };
       } else {
-        await supabase.from("users").upsert({ id: invited.user.id, email: invited.user.email }, { onConflict: "id" });
-        targetUser = { id: invited.user.id };
+        // No password provided — fall back to invite email
+        const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(input.email);
+        if (inviteErr) {
+          const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+          const existing = (listData?.users ?? []).find((u: any) => u.email === input.email);
+          if (!existing) return c.json({ message: inviteErr.message }, 400);
+          await supabase.from("users").upsert({ id: existing.id, email: existing.email }, { onConflict: "id" });
+          targetUser = { id: existing.id };
+        } else {
+          await supabase.from("users").upsert({ id: invited.user.id, email: invited.user.email }, { onConflict: "id" });
+          targetUser = { id: invited.user.id };
+        }
       }
     }
     const { data: role } = await supabase

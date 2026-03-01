@@ -20,7 +20,7 @@ export function useAddUserRole(orgId: number) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { email: string; role: string }) => {
+    mutationFn: async (data: { email: string; role: string; password?: string }) => {
       const url = buildUrl(api.userRoles.create.path, { orgId });
       const res = await apiRequest("POST", url, data);
       return res.json();

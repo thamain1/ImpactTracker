@@ -51,6 +51,7 @@ export default function Settings() {
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("can_view");
+  const [invitePassword, setInvitePassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [newArea, setNewArea] = useState({ name: "", lat: "", lng: "", description: "" });
   const [seedingAreas, setSeedingAreas] = useState(false);
@@ -140,9 +141,10 @@ export default function Settings() {
 
   const handleInvite = () => {
     if (!inviteEmail) return;
-    addRole.mutate({ email: inviteEmail, role: inviteRole }, {
+    addRole.mutate({ email: inviteEmail, role: inviteRole, password: invitePassword || undefined }, {
       onSuccess: () => {
         setInviteEmail("");
+        setInvitePassword("");
         setInviteRole("can_view");
       },
     });
@@ -500,28 +502,40 @@ export default function Settings() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Invite Form */}
-          <div className="flex flex-col sm:flex-row gap-3 p-4 bg-muted/50 rounded-lg">
-            <Input
-              placeholder="user@example.com"
-              value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
-              className="flex-1"
-              data-testid="input-invite-email"
-            />
-            <Select value={inviteRole} onValueChange={setInviteRole}>
-              <SelectTrigger className="w-48" data-testid="select-invite-role">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="can_edit">Can Edit</SelectItem>
-                <SelectItem value="can_view">Can View</SelectItem>
-                <SelectItem value="can_view_download">Can View & Download</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button onClick={handleInvite} disabled={addRole.isPending || !inviteEmail} data-testid="button-invite">
-              {addRole.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Member"}
-            </Button>
+          <div className="flex flex-col gap-3 p-4 bg-muted/50 rounded-lg">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Input
+                placeholder="user@example.com"
+                value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                className="flex-1"
+                data-testid="input-invite-email"
+              />
+              <Input
+                type="password"
+                placeholder="Temporary password"
+                value={invitePassword}
+                onChange={e => setInvitePassword(e.target.value)}
+                className="flex-1"
+              />
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Select value={inviteRole} onValueChange={setInviteRole}>
+                <SelectTrigger className="flex-1" data-testid="select-invite-role">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="can_edit">Can Edit</SelectItem>
+                  <SelectItem value="can_view">Can View</SelectItem>
+                  <SelectItem value="can_view_download">Can View & Download</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleInvite} disabled={addRole.isPending || !inviteEmail} data-testid="button-invite">
+                {addRole.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Add Member"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">Enter a temporary password to create the account instantly, or leave blank to send an email invite.</p>
           </div>
 
           {/* Members List */}
