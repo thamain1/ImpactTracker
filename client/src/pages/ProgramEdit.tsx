@@ -191,6 +191,29 @@ export default function ProgramEdit() {
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Program Budget ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="e.g. 50000"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            data-testid="input-edit-budget"
+                          />
+                        </FormControl>
+                        <FormDescription>Total program budget in dollars.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
@@ -477,50 +500,25 @@ export default function ProgramEdit() {
                     )}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="budget"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Program Budget ($)</FormLabel>
-                          <FormControl>
-                            <Input
-                              type="number"
-                              min={0}
-                              placeholder="e.g. 50000"
-                              {...field}
-                              value={field.value ?? ""}
-                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
-                              data-testid="input-edit-budget"
-                            />
-                          </FormControl>
-                          <FormDescription>Total program budget in dollars.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="costPerParticipant"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Cost Per Participant ($)</FormLabel>
-                          <FormControl>
-                            <Input
-                              placeholder="e.g. 25.00"
-                              {...field}
-                              value={field.value || ""}
-                              data-testid="input-edit-cost-per-participant"
-                            />
-                          </FormControl>
-                          <FormDescription>Average cost per participant served.</FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={form.control}
+                    name="costPerParticipant"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Cost Per Participant ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="e.g. 25.00"
+                            {...field}
+                            value={field.value || ""}
+                            data-testid="input-edit-cost-per-participant"
+                          />
+                        </FormControl>
+                        <FormDescription>Average cost per participant served.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
