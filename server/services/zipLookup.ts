@@ -72,6 +72,8 @@ const LA_ZIP_TO_SPA: Record<string, string> = {
   "90272": "SPA 5", "90290": "SPA 5", "90291": "SPA 5", "90292": "SPA 5",
   "90293": "SPA 5", "90401": "SPA 5", "90402": "SPA 5", "90403": "SPA 5",
   "90404": "SPA 5", "90405": "SPA 5",
+  // Beverly Hills, West Hollywood
+  "90210": "SPA 5", "90211": "SPA 5", "90212": "SPA 5", "90046": "SPA 5", "90048": "SPA 5",
 
   // SPA 6 — South (Watts/Compton)
   "90001": "SPA 6", "90002": "SPA 6", "90003": "SPA 6", "90011": "SPA 6",
