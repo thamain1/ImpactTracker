@@ -60,6 +60,7 @@ interface ImpactEntry {
   zipCode?: string | null;
   demographics?: string | null;
   outcomes?: string | null;
+  geoContext?: { spa?: string; city?: string; county?: string; state?: string } | null;
 }
 
 interface AiNarrative {
@@ -513,8 +514,8 @@ export function generateImpactStudyPdf(data: ReportData) {
   });
 
   if (reachData.length > 0) {
-    const popLabel = (program.targetAgeMin != null || program.targetAgeMax != null)
-      ? "Target Age Pop" : "Total Population";
+    const hasAgeTargets = program.targetAgeMin != null || program.targetAgeMax != null;
+    const popLabel = hasAgeTargets ? "Population *" : "Total Population";
 
     checkPageBreak(15 + reachData.length * 8);
     autoTable(doc, {
@@ -533,7 +534,22 @@ export function generateImpactStudyPdf(data: ReportData) {
       tableLineColor: COLORS.tableBorder,
       tableLineWidth: 0.1,
     });
-    y = (doc as any).lastAutoTable.finalY + 6;
+    y = (doc as any).lastAutoTable.finalY + 4;
+
+    if (hasAgeTargets) {
+      const ageRange = program.targetAgeMin != null && program.targetAgeMax != null
+        ? `${program.targetAgeMin}–${program.targetAgeMax}`
+        : program.targetAgeMin != null ? `${program.targetAgeMin}+` : `up to ${program.targetAgeMax}`;
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      doc.setTextColor(...COLORS.medium);
+      checkPageBreak(5);
+      doc.text(`* Population = target age group (${ageRange}) where available; total census population otherwise.`, margin, y);
+      y += 6;
+      doc.setTextColor(...COLORS.dark);
+    } else {
+      y += 2;
+    }
 
     drawParagraph("The program achieved its strongest penetration in the immediate service areas where community trust and presence are established.");
   }
@@ -689,9 +705,13 @@ export function generateImpactStudyPdf(data: ReportData) {
     const detailRows = entries.slice(0, 50).map(e => {
       const mv = e.metricValues as Record<string, number>;
       const metricStr = Object.entries(mv).map(([k, v]) => `${k}: ${formatNumber(Number(v))}`).join(", ");
+      const ctx = e.geoContext;
+      const geoLabel = ctx?.city
+        ? `${ctx.city} (${e.geographyLevel})`
+        : `${e.geographyValue} (${e.geographyLevel})`;
       return [
         formatDate(e.date),
-        `${e.geographyValue} (${e.geographyLevel})`,
+        geoLabel,
         e.zipCode || "-",
         metricStr,
       ];
