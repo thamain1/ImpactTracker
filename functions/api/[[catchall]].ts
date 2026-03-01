@@ -290,15 +290,19 @@ app.post("/api/organizations/:orgId/roles", async (c) => {
     let { data: targetUser } = await supabase
       .from("users").select("id").eq("email", input.email).maybeSingle();
     if (!targetUser) {
-      // Invite user via Supabase Auth — sends them an email to set their password
+      // Try to invite — if they already have an auth account this will fail
       const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(input.email);
-      if (inviteErr) return c.json({ message: inviteErr.message }, 400);
-      // Upsert into local users table so the FK works
-      await supabase.from("users").upsert({
-        id: invited.user.id,
-        email: invited.user.email,
-      }, { onConflict: "id" });
-      targetUser = { id: invited.user.id };
+      if (inviteErr) {
+        // User already exists in auth.users — find them and sync to local users table
+        const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+        const existing = (listData?.users ?? []).find((u: any) => u.email === input.email);
+        if (!existing) return c.json({ message: inviteErr.message }, 400);
+        await supabase.from("users").upsert({ id: existing.id, email: existing.email }, { onConflict: "id" });
+        targetUser = { id: existing.id };
+      } else {
+        await supabase.from("users").upsert({ id: invited.user.id, email: invited.user.email }, { onConflict: "id" });
+        targetUser = { id: invited.user.id };
+      }
     }
     const { data: role } = await supabase
       .from("user_roles").insert({ org_id: orgId, user_id: targetUser.id, role: input.role }).select().single();
