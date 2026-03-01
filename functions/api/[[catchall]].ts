@@ -287,9 +287,19 @@ app.post("/api/organizations/:orgId/roles", async (c) => {
   try {
     const body = await c.req.json();
     const input = roleCreateSchema.parse(body);
-    const { data: targetUser } = await supabase
+    let { data: targetUser } = await supabase
       .from("users").select("id").eq("email", input.email).maybeSingle();
-    if (!targetUser) return c.json({ message: "No user found with that email. They must sign up first." }, 404);
+    if (!targetUser) {
+      // Invite user via Supabase Auth — sends them an email to set their password
+      const { data: invited, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(input.email);
+      if (inviteErr) return c.json({ message: inviteErr.message }, 400);
+      // Upsert into local users table so the FK works
+      await supabase.from("users").upsert({
+        id: invited.user.id,
+        email: invited.user.email,
+      }, { onConflict: "id" });
+      targetUser = { id: invited.user.id };
+    }
     const { data: role } = await supabase
       .from("user_roles").insert({ org_id: orgId, user_id: targetUser.id, role: input.role }).select().single();
     return c.json(toCamel(role), 201);
