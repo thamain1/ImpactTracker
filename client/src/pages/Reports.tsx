@@ -539,6 +539,64 @@ export default function Reports() {
             </Card>
           )}
 
+          {/* Cost Summary */}
+          {selectedProgram && (() => {
+            const budgetNum = (selectedProgram as any).budget as number | null;
+            const cppRaw = selectedProgram.costPerParticipant;
+            const cppNum = cppRaw ? parseFloat(cppRaw.replace(/[$,\s]/g, "")) : NaN;
+            const hasCpp = !isNaN(cppNum) && cppNum > 0;
+            const hasBudget = !!budgetNum && budgetNum > 0;
+            if (!hasBudget && !cppRaw) return null;
+
+            const effectiveCpp = hasBudget && totalImpact > 0 ? budgetNum! / totalImpact : null;
+            const estimatedTotal = hasCpp && totalImpact > 0 ? cppNum * totalImpact : null;
+
+            return (
+              <Card data-testid="card-cost-summary">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-primary" />
+                    Cost Summary
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid sm:grid-cols-3 gap-6">
+                    {hasBudget && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Program Budget</p>
+                        <p className="text-2xl font-heading font-bold text-slate-900">${budgetNum!.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">Total allocation</p>
+                      </div>
+                    )}
+                    {cppRaw && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cost Per Participant</p>
+                        <p className="text-2xl font-heading font-bold text-slate-900">{cppRaw}</p>
+                        <p className="text-xs text-muted-foreground">Stated rate</p>
+                      </div>
+                    )}
+                    {effectiveCpp !== null && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Effective CPP</p>
+                        <p className="text-2xl font-heading font-bold text-emerald-600">
+                          ${effectiveCpp.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Budget ÷ {totalImpact.toLocaleString()} served</p>
+                      </div>
+                    )}
+                    {effectiveCpp === null && estimatedTotal !== null && (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Total Cost to Serve</p>
+                        <p className="text-2xl font-heading font-bold text-emerald-600">${estimatedTotal.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{totalImpact.toLocaleString()} participants × {cppRaw}</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })()}
+
           {/* Service Area Map */}
           {Object.keys(geoCoords).length > 0 && (
             <Card data-testid="card-service-area-map">
