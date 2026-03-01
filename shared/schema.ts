@@ -18,6 +18,10 @@ export const organizations = pgTable("organizations", {
   contactEmail: text("contact_email"),
   mission: text("mission"),
   vision: text("vision"),
+  // MOU additions — Org Context fields
+  annualBudgetRange: text("annual_budget_range"),       // e.g. "Under $500K", "$500K–$1M"
+  targetPopulationFocus: text("target_population_focus"), // e.g. "Youth", "Families"
+  primaryFundingType: text("primary_funding_type"),     // e.g. "Government Grants"
   createdAt: timestamp("created_at").defaultNow(),
 });
 

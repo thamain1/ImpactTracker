@@ -43,6 +43,9 @@ export default function Settings() {
     contactEmail: "",
     mission: "",
     vision: "",
+    annualBudgetRange: "",
+    targetPopulationFocus: "",
+    primaryFundingType: "",
   });
 
   const [inviteEmail, setInviteEmail] = useState("");
@@ -61,6 +64,9 @@ export default function Settings() {
         contactEmail: (org as any).contactEmail || "",
         mission: (org as any).mission || "",
         vision: (org as any).vision || "",
+        annualBudgetRange: (org as any).annualBudgetRange || "",
+        targetPopulationFocus: (org as any).targetPopulationFocus || "",
+        primaryFundingType: (org as any).primaryFundingType || "",
       });
     }
   }, [org]);
@@ -253,6 +259,88 @@ export default function Settings() {
           </div>
           <div className="flex justify-end pt-2">
             <Button onClick={saveOrgProfile} disabled={saving} data-testid="button-save-mission">
+              {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+              Save
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Organization Context */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Target className="w-5 h-5" />
+            Organization Context
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="org-budget-range">Annual Budget Range</Label>
+              <Select
+                value={orgForm.annualBudgetRange || "__none__"}
+                onValueChange={v => setOrgForm(f => ({ ...f, annualBudgetRange: v === "__none__" ? "" : v }))}
+              >
+                <SelectTrigger id="org-budget-range" data-testid="select-org-budget-range">
+                  <SelectValue placeholder="Select range" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Not specified —</SelectItem>
+                  <SelectItem value="Under $500K">Under $500K</SelectItem>
+                  <SelectItem value="$500K–$1M">$500K–$1M</SelectItem>
+                  <SelectItem value="$1M–$5M">$1M–$5M</SelectItem>
+                  <SelectItem value="$5M–$10M">$5M–$10M</SelectItem>
+                  <SelectItem value="Over $10M">Over $10M</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="org-pop-focus">Target Population Focus</Label>
+              <Select
+                value={orgForm.targetPopulationFocus || "__none__"}
+                onValueChange={v => setOrgForm(f => ({ ...f, targetPopulationFocus: v === "__none__" ? "" : v }))}
+              >
+                <SelectTrigger id="org-pop-focus" data-testid="select-org-pop-focus">
+                  <SelectValue placeholder="Select population" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Not specified —</SelectItem>
+                  <SelectItem value="Youth / Children">Youth / Children</SelectItem>
+                  <SelectItem value="Adults">Adults</SelectItem>
+                  <SelectItem value="Seniors / Elderly">Seniors / Elderly</SelectItem>
+                  <SelectItem value="Veterans">Veterans</SelectItem>
+                  <SelectItem value="Homeless / Housing-insecure">Homeless / Housing-insecure</SelectItem>
+                  <SelectItem value="Formerly Incarcerated">Formerly Incarcerated</SelectItem>
+                  <SelectItem value="Families">Families</SelectItem>
+                  <SelectItem value="Immigrants / Refugees">Immigrants / Refugees</SelectItem>
+                  <SelectItem value="General Community">General Community</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="org-funding-type">Primary Funding Type</Label>
+              <Select
+                value={orgForm.primaryFundingType || "__none__"}
+                onValueChange={v => setOrgForm(f => ({ ...f, primaryFundingType: v === "__none__" ? "" : v }))}
+              >
+                <SelectTrigger id="org-funding-type" data-testid="select-org-funding-type">
+                  <SelectValue placeholder="Select type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">— Not specified —</SelectItem>
+                  <SelectItem value="Government Grants">Government Grants</SelectItem>
+                  <SelectItem value="Private Foundations">Private Foundations</SelectItem>
+                  <SelectItem value="Individual Donors">Individual Donors</SelectItem>
+                  <SelectItem value="Corporate Sponsors">Corporate Sponsors</SelectItem>
+                  <SelectItem value="Fee for Service">Fee for Service</SelectItem>
+                  <SelectItem value="Mixed / Multiple Sources">Mixed / Multiple Sources</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex justify-end pt-2">
+            <Button onClick={saveOrgProfile} disabled={saving} data-testid="button-save-context">
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
               Save
             </Button>
