@@ -373,12 +373,10 @@ export async function registerRoutes(
       const value = entry.geographyValue;
       const metrics = entry.metricValues as Record<string, number>;
 
+      // Each entry counts only at the level it was explicitly logged.
+      // No automatic parent rollup here — that prevents double-counting when entries
+      // exist at multiple geographic levels (e.g. SPA + County for the same program).
       addToAggregation(level, value, metrics);
-
-      const parents = getParentGeographies(level, value);
-      parents.forEach(parent => {
-        addToAggregation(parent.level, parent.value, metrics);
-      });
     });
 
     const stats: unknown[] = [];
