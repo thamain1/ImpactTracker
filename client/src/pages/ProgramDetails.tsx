@@ -18,7 +18,7 @@ import {
   AreaChart
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart, Truck, Users, DollarSign, Activity } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -360,6 +360,51 @@ export default function ProgramDetails() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Operations card — only shown when at least one field is set */}
+          {((program as any).deliveryType || (program as any).budget || (program as any).staffCount || (program as any).monthlyCapacity) && (
+            <Card className="border-slate-200">
+              <CardHeader>
+                <CardTitle className="text-base">Operations</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 text-sm">
+                  {(program as any).deliveryType && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Truck className="w-3.5 h-3.5" /> Delivery
+                      </span>
+                      <span className="font-medium text-slate-700">{(program as any).deliveryType}</span>
+                    </div>
+                  )}
+                  {(program as any).staffCount != null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Users className="w-3.5 h-3.5" /> Staff
+                      </span>
+                      <span className="font-medium text-slate-700">{(program as any).staffCount}</span>
+                    </div>
+                  )}
+                  {(program as any).monthlyCapacity != null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Activity className="w-3.5 h-3.5" /> Monthly Capacity
+                      </span>
+                      <span className="font-medium text-slate-700">{((program as any).monthlyCapacity as number).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {(program as any).budget != null && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5" /> Budget
+                      </span>
+                      <span className="font-medium text-slate-700">${((program as any).budget as number).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="border-slate-200">
             <CardHeader>

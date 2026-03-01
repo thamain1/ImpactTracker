@@ -44,6 +44,11 @@ export const programs = pgTable("programs", {
   goals: text("goals"),
   costPerParticipant: text("cost_per_participant"),
   locations: text("locations"),
+  // MOU additions — Program Details fields
+  deliveryType: text("delivery_type"),   // In-person | Virtual | Hybrid
+  budget: integer("budget"),             // Total program budget in whole dollars
+  staffCount: integer("staff_count"),    // Number of staff
+  monthlyCapacity: integer("monthly_capacity"), // Max participants per month
   createdAt: timestamp("created_at").defaultNow(),
 });
 

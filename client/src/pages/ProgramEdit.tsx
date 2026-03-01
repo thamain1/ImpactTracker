@@ -29,6 +29,10 @@ const formSchema = z.object({
   goals: z.string().optional().nullable(),
   costPerParticipant: z.string().optional().nullable(),
   locations: z.string().optional().nullable(),
+  deliveryType: z.string().optional().nullable(),
+  budget: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
+  staffCount: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
+  monthlyCapacity: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -61,6 +65,10 @@ export default function ProgramEdit() {
       goals: "",
       costPerParticipant: "",
       locations: "",
+      deliveryType: "",
+      budget: null,
+      staffCount: null,
+      monthlyCapacity: null,
     },
   });
 
@@ -79,6 +87,10 @@ export default function ProgramEdit() {
         goals: program.goals || "",
         costPerParticipant: (program as any).costPerParticipant || "",
         locations: program.locations || "",
+        deliveryType: (program as any).deliveryType || "",
+        budget: (program as any).budget ?? null,
+        staffCount: (program as any).staffCount ?? null,
+        monthlyCapacity: (program as any).monthlyCapacity ?? null,
       });
     }
   }, [program, form]);
@@ -271,6 +283,77 @@ export default function ProgramEdit() {
 
                   <FormField
                     control={form.control}
+                    name="deliveryType"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Delivery Type</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ""}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-edit-delivery-type">
+                              <SelectValue placeholder="Select delivery type" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="In-person">In-person</SelectItem>
+                            <SelectItem value="Virtual">Virtual</SelectItem>
+                            <SelectItem value="Hybrid">Hybrid</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="staffCount"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Staff Count</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="e.g. 5"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-edit-staff-count"
+                            />
+                          </FormControl>
+                          <FormDescription>Number of staff supporting this program.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="monthlyCapacity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Monthly Capacity</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="e.g. 200"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-edit-monthly-capacity"
+                            />
+                          </FormControl>
+                          <FormDescription>Max participants per month.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
                     name="status"
                     render={({ field }) => (
                       <FormItem>
@@ -394,25 +477,50 @@ export default function ProgramEdit() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="costPerParticipant"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cost Per Participant</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="e.g. $25.00"
-                            {...field}
-                            value={field.value || ""}
-                            data-testid="input-edit-cost-per-participant"
-                          />
-                        </FormControl>
-                        <FormDescription>Average cost per participant served.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="budget"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Program Budget ($)</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={0}
+                              placeholder="e.g. 50000"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                              data-testid="input-edit-budget"
+                            />
+                          </FormControl>
+                          <FormDescription>Total program budget in dollars.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="costPerParticipant"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Cost Per Participant ($)</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g. 25.00"
+                              {...field}
+                              value={field.value || ""}
+                              data-testid="input-edit-cost-per-participant"
+                            />
+                          </FormControl>
+                          <FormDescription>Average cost per participant served.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </CardContent>
               </Card>
             </TabsContent>
