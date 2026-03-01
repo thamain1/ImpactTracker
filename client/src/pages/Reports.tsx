@@ -394,55 +394,122 @@ export default function Reports() {
         </div>
       ) : activeTab === "charts" ? (
         <>
-          {/* Summary Row */}
-          {filteredStats && filteredStats.length > 0 && (
-            <div className="grid sm:grid-cols-4 gap-4">
-              {["SPA", "City", "County", "State"].map(level => {
-                const levelStats = filteredStats.filter(s => s.geographyLevel === level);
-                const total = levelStats.reduce((sum, s) => {
-                  let t = 0;
-                  participantMetricNames.forEach(name => { t += Number(s.metrics[name] || 0); });
-                  return sum + t;
-                }, 0);
-                const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
-                const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
-                const reachPct = levelPop > 0 && total > 0
-                  ? Math.round((total / levelPop) * 10000) / 100
-                  : null;
-                return (
-                  <Card key={level} data-testid={`geo-card-${level.toLowerCase()}`}>
-                    <CardContent className="p-4">
-                      <p className="text-xs text-muted-foreground font-medium uppercase">{level}</p>
-                      <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
-                      <p className="text-xs text-muted-foreground">Participants</p>
-                      {levelPop > 0 && (
-                        <div className="mt-2 pt-2 border-t space-y-1">
-                          <div className="flex items-center justify-between gap-2 text-xs">
-                            <span className="text-muted-foreground">Population</span>
-                            <span className="font-semibold text-slate-700">{levelPop.toLocaleString()}</span>
-                          </div>
-                          {reachPct !== null && (
-                            <div>
-                              <div className="flex items-center justify-between gap-2 text-xs mb-1">
-                                <span className="text-muted-foreground">Reach</span>
-                                <span className="font-semibold text-emerald-600">{reachPct}%</span>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5">
-                                <div
-                                  className="bg-primary rounded-full h-1.5 transition-all"
-                                  style={{ width: `${Math.min(reachPct, 100)}%` }}
-                                />
-                              </div>
-                            </div>
-                          )}
+          {/* Summary Cards */}
+          {filteredStats && filteredStats.length > 0 && (() => {
+            const spaEntries = filteredStats.filter(s => s.geographyLevel === "SPA");
+
+            // Helper: sum participant metrics for a single stat entry
+            const entryTotal = (s: typeof filteredStats[0]) => {
+              let t = 0;
+              participantMetricNames.forEach(name => { t += Number(s.metrics[name] || 0); });
+              return t;
+            };
+
+            // Geo card (City / County / State — aggregated per level)
+            const GeoCard = ({ level }: { level: string }) => {
+              const levelStats = filteredStats.filter(s => s.geographyLevel === level);
+              if (levelStats.length === 0) return null;
+              const total = levelStats.reduce((sum, s) => sum + entryTotal(s), 0);
+              const levelCensus = censusData?.filter(c => c.geographyLevel === level) || [];
+              const levelPop = levelCensus.reduce((sum, c) => sum + (c.totalPopulation || 0), 0);
+              const reachPct = levelPop > 0 && total > 0
+                ? Math.round((total / levelPop) * 10000) / 100 : null;
+              return (
+                <Card data-testid={`geo-card-${level.toLowerCase()}`}>
+                  <CardContent className="p-4">
+                    <p className="text-xs text-muted-foreground font-medium uppercase">{level}</p>
+                    <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground">Participants</p>
+                    {levelPop > 0 && (
+                      <div className="mt-2 pt-2 border-t space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-muted-foreground">Population</span>
+                          <span className="font-semibold text-slate-700">{levelPop.toLocaleString()}</span>
                         </div>
-                      )}
+                        {reachPct !== null && (
+                          <div>
+                            <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                              <span className="text-muted-foreground">Reach</span>
+                              <span className="font-semibold text-emerald-600">{reachPct}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 rounded-full h-1.5">
+                              <div className="bg-primary rounded-full h-1.5 transition-all"
+                                style={{ width: `${Math.min(reachPct, 100)}%` }} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            };
+
+            return (
+              <div className="space-y-3">
+                {/* Row 1: Total + individual SPA cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {/* Total participants — direct entry sum, always matches goal vs actual */}
+                  <Card data-testid="geo-card-total" className="border-primary/30 bg-primary/5">
+                    <CardContent className="p-4">
+                      <p className="text-xs text-primary font-medium uppercase">Total</p>
+                      <p className="text-2xl font-heading font-bold text-slate-900 mt-1">
+                        {(goalData?.actual ?? 0).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Participants Served</p>
                     </CardContent>
                   </Card>
-                );
-              })}
-            </div>
-          )}
+
+                  {/* One card per SPA */}
+                  {spaEntries.map(spa => {
+                    const total = entryTotal(spa);
+                    const spaCensus = censusData?.find(
+                      c => c.geographyLevel === "SPA" && c.geographyValue === spa.geographyValue
+                    );
+                    const spaPop = spaCensus?.totalPopulation || 0;
+                    const reachPct = spaPop > 0 && total > 0
+                      ? Math.round((total / spaPop) * 10000) / 100 : null;
+                    return (
+                      <Card key={spa.geographyValue} data-testid={`geo-card-spa-${spa.geographyValue.replace(/\s+/g, "-").toLowerCase()}`}>
+                        <CardContent className="p-4">
+                          <p className="text-xs text-muted-foreground font-medium uppercase">{spa.geographyValue}</p>
+                          <p className="text-2xl font-heading font-bold text-slate-900 mt-1">{total.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">Participants</p>
+                          {spaPop > 0 && (
+                            <div className="mt-2 pt-2 border-t space-y-1">
+                              <div className="flex items-center justify-between gap-2 text-xs">
+                                <span className="text-muted-foreground">Population</span>
+                                <span className="font-semibold text-slate-700">{spaPop.toLocaleString()}</span>
+                              </div>
+                              {reachPct !== null && (
+                                <div>
+                                  <div className="flex items-center justify-between gap-2 text-xs mb-1">
+                                    <span className="text-muted-foreground">Reach</span>
+                                    <span className="font-semibold text-emerald-600">{reachPct}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-100 rounded-full h-1.5">
+                                    <div className="bg-primary rounded-full h-1.5 transition-all"
+                                      style={{ width: `${Math.min(reachPct, 100)}%` }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+
+                {/* Row 2: City / County / State */}
+                <div className="grid grid-cols-3 gap-4">
+                  <GeoCard level="City" />
+                  <GeoCard level="County" />
+                  <GeoCard level="State" />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Program Overview */}
           {selectedProgram && (
