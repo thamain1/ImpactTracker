@@ -776,5 +776,104 @@ export async function registerRoutes(
     }
   });
 
+  // === CSV Import ===
+  app.post("/api/programs/:id/import-csv", requireAuth, async (req, res) => {
+    try {
+      const programId = Number(req.params.id);
+      const userId = req.user!.id;
+
+      if (!(await userOwnsProgram(userId, programId)))
+        return res.status(403).json({ message: "Not authorized" });
+
+      const program = await storage.getProgram(programId);
+      if (!program) return res.status(404).json({ message: "Program not found" });
+
+      const { rows } = req.body as { rows: Record<string, string>[] };
+      if (!Array.isArray(rows) || rows.length === 0)
+        return res.status(400).json({ message: "No rows provided" });
+
+      const metricNames = program.metrics.map(m => m.name);
+      const parsePct = (v: string | undefined) =>
+        v !== undefined && v !== "" ? parseFloat(v) || null : null;
+
+      let created = 0;
+      const errors: string[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const rowNum = i + 2; // human-readable (1-indexed, header is row 1)
+
+        if (!row.date || !/^\d{4}-\d{2}-\d{2}$/.test(row.date.trim())) {
+          errors.push(`Row ${rowNum}: invalid or missing date (expected YYYY-MM-DD)`);
+          continue;
+        }
+
+        // Resolve geography
+        let geoLevel = (row.geography_level || "").trim() as "SPA" | "City" | "County" | "State";
+        let geoValue = (row.geography_value || "").trim();
+        let geoContext: Record<string, string> | null = null;
+        const zip = (row.zip_code || "").replace(/\D/g, "");
+
+        if (zip.length === 5) {
+          const ctx = await resolveZipCode(zip);
+          if (ctx) {
+            geoContext = ctx as Record<string, string>;
+            if ((ctx as any).spa)    { geoLevel = "SPA";    geoValue = (ctx as any).spa; }
+            else if ((ctx as any).city)   { geoLevel = "City";   geoValue = (ctx as any).city; }
+            else if ((ctx as any).county) { geoLevel = "County"; geoValue = (ctx as any).county; }
+            else if ((ctx as any).state)  { geoLevel = "State";  geoValue = (ctx as any).state; }
+          }
+        }
+
+        if (!geoLevel || !geoValue) {
+          errors.push(`Row ${rowNum}: missing geography — provide zip_code or both geography_level and geography_value`);
+          continue;
+        }
+
+        const validGeoLevels = ["SPA", "City", "County", "State"];
+        if (!validGeoLevels.includes(geoLevel)) {
+          errors.push(`Row ${rowNum}: invalid geography_level "${geoLevel}" — must be SPA, City, County, or State`);
+          continue;
+        }
+
+        // Build metric values
+        const metricValues: Record<string, number> = {};
+        metricNames.forEach(name => {
+          const v = row[name];
+          if (v !== undefined && v !== "") metricValues[name] = parseFloat(v) || 0;
+          else metricValues[name] = 0;
+        });
+
+        try {
+          await storage.createImpactEntry({
+            programId,
+            userId,
+            date: row.date.trim(),
+            geographyLevel: geoLevel,
+            geographyValue: geoValue,
+            zipCode: zip.length === 5 ? zip : null,
+            geoContext,
+            demographics: row.demographics?.trim() || null,
+            outcomes: row.outcomes?.trim() || null,
+            metricValues,
+            pctCompletingProgram: parsePct(row.pct_completing_program),
+            pctEmploymentGained:   parsePct(row.pct_employment_gained),
+            pctHousingSecured:     parsePct(row.pct_housing_secured),
+            pctGradeImprovement:   parsePct(row.pct_grade_improvement),
+            pctRecidivismReduction:parsePct(row.pct_recidivism_reduction),
+          } as any);
+          created++;
+        } catch (e) {
+          errors.push(`Row ${rowNum}: ${e instanceof Error ? e.message : "unknown error"}`);
+        }
+      }
+
+      res.json({ created, errors });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      res.status(500).json({ message: msg });
+    }
+  });
+
   return httpServer;
 }

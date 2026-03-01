@@ -3,6 +3,7 @@ import { useProgram } from "@/hooks/use-programs";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
 import { EditImpactDialog } from "@/components/EditImpactDialog";
+import { ImportCsvDialog } from "@/components/ImportCsvDialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -160,6 +161,7 @@ export default function ProgramDetails() {
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
+            <ImportCsvDialog program={program} />
             <AddImpactDialog program={program} />
           </div>
         </div>
