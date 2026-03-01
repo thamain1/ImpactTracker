@@ -16,10 +16,7 @@ export function useCensusLookup(level: string, value: string) {
   return useQuery<CensusComparison>({
     queryKey: ["/api/census", level, value],
     queryFn: async () => {
-      const res = await fetch(`/api/census?level=${encodeURIComponent(level)}&value=${encodeURIComponent(value)}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Census lookup failed");
+      const res = await apiRequest("GET", `/api/census?level=${encodeURIComponent(level)}&value=${encodeURIComponent(value)}`);
       return res.json();
     },
     enabled: !!level && !!value,
@@ -39,8 +36,7 @@ export function useCensusComparison(orgId?: number) {
       const url = orgId
         ? `/api/census/comparison?orgId=${orgId}`
         : "/api/census/comparison";
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Census comparison failed");
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: !!orgId,
@@ -78,7 +74,7 @@ export function useCensusAgeGroups(
   return useQuery<AgeGroupResult[]>({
     queryKey: ["/api/census/age-groups", JSON.stringify(geographies), ageMin, ageMax],
     queryFn: async () => {
-      const body: any = { geographies };
+      const body: Record<string, unknown> = { geographies };
       if (ageMin != null) body.ageMin = ageMin;
       if (ageMax != null) body.ageMax = ageMax;
       const res = await apiRequest("POST", "/api/census/age-groups", body);

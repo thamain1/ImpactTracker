@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, buildUrl } from "@shared/routes";
+import { api } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 
@@ -7,9 +8,7 @@ export function useImpactStats(programId: number) {
   return useQuery({
     queryKey: [api.impact.stats.path, programId],
     queryFn: async () => {
-      const url = `${api.impact.stats.path}?programId=${programId}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch impact stats");
+      const res = await apiRequest("GET", `${api.impact.stats.path}?programId=${programId}`);
       return api.impact.stats.responses[200].parse(await res.json());
     },
     enabled: !!programId,
@@ -20,9 +19,7 @@ export function useImpactEntries(programId: number) {
   return useQuery({
     queryKey: [api.impact.list.path, programId],
     queryFn: async () => {
-      const url = `${api.impact.list.path}?programId=${programId}`;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch impact entries");
+      const res = await apiRequest("GET", `${api.impact.list.path}?programId=${programId}`);
       return api.impact.list.responses[200].parse(await res.json());
     },
     enabled: !!programId,
@@ -34,19 +31,8 @@ export function useUpdateImpactEntry() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ id, programId, ...data }: { id: number; programId: number } & Record<string, any>) => {
-      const res = await fetch(`/api/impact/${id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to update impact entry");
-      }
-
+    mutationFn: async ({ id, programId, ...data }: { id: number; programId: number } & Record<string, unknown>) => {
+      const res = await apiRequest("PUT", `/api/impact/${id}`, data);
       return res.json();
     },
     onSuccess: (_, variables) => {
@@ -74,18 +60,7 @@ export function useCreateImpactEntry() {
 
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.impact.create.input>) => {
-      const res = await fetch(api.impact.create.path, {
-        method: api.impact.create.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to log impact");
-      }
-      
+      const res = await apiRequest("POST", api.impact.create.path, data);
       return api.impact.create.responses[201].parse(await res.json());
     },
     onSuccess: (_, variables) => {

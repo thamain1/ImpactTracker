@@ -13,8 +13,7 @@ export function usePrograms(orgId?: number) {
         ? `${api.programs.list.path}?orgId=${orgId}` 
         : api.programs.list.path;
       
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch programs");
+      const res = await apiRequest("GET", url);
       return api.programs.list.responses[200].parse(await res.json());
     },
   });
@@ -25,8 +24,7 @@ export function useProgram(id: number) {
     queryKey: [api.programs.get.path, id],
     queryFn: async () => {
       const url = buildUrl(api.programs.get.path, { id });
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch program details");
+      const res = await apiRequest("GET", url);
       return api.programs.get.responses[200].parse(await res.json());
     },
     enabled: !!id,
@@ -39,18 +37,7 @@ export function useCreateProgram() {
 
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.programs.create.input>) => {
-      const res = await fetch(api.programs.create.path, {
-        method: api.programs.create.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-      
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to create program");
-      }
-      
+      const res = await apiRequest(api.programs.create.method, api.programs.create.path, data);
       return api.programs.create.responses[201].parse(await res.json());
     },
     onSuccess: () => {
@@ -135,18 +122,7 @@ export function useUpdateProgram(id: number) {
   return useMutation({
     mutationFn: async (data: UpdateProgram) => {
       const url = buildUrl(api.programs.update.path, { id });
-      const res = await fetch(url, {
-        method: api.programs.update.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to update program");
-      }
-
+      const res = await apiRequest(api.programs.update.method, url, data);
       return res.json();
     },
     onSuccess: () => {

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { apiRequest } from "@/lib/queryClient";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { useUserRoles, useAddUserRole, useDeleteUserRole } from "@/hooks/use-user-roles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,13 +58,7 @@ export default function Settings() {
     setSaving(true);
     try {
       const url = buildUrl(api.organizations.update.path, { id: orgId });
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orgForm),
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to save");
+      await apiRequest("PUT", url, orgForm);
       toast({ title: "Saved", description: "Organization profile updated." });
     } catch {
       toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" });

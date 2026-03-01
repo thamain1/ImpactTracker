@@ -14,17 +14,13 @@ export function useAuth() {
   const [user, setUser] = useState<User | null | undefined>(undefined);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        await syncUserToDb();
-      }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) syncUserToDb();
       setUser(session?.user ?? null);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await syncUserToDb();
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session?.user) syncUserToDb();
       setUser(session?.user ?? null);
     });
 

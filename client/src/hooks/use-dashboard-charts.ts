@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 
 export function useDashboardCharts(orgId?: number) {
   return useQuery({
@@ -8,8 +9,7 @@ export function useDashboardCharts(orgId?: number) {
       const url = orgId
         ? `${api.dashboard.charts.path}?orgId=${orgId}`
         : api.dashboard.charts.path;
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch dashboard charts");
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: !!orgId,

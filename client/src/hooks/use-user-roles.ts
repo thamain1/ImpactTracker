@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 export function useUserRoles(orgId: number) {
@@ -7,8 +8,7 @@ export function useUserRoles(orgId: number) {
     queryKey: ["/api/organizations/roles", orgId],
     queryFn: async () => {
       const url = buildUrl(api.userRoles.list.path, { orgId });
-      const res = await fetch(url, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch user roles");
+      const res = await apiRequest("GET", url);
       return res.json();
     },
     enabled: !!orgId,
@@ -22,16 +22,7 @@ export function useAddUserRole(orgId: number) {
   return useMutation({
     mutationFn: async (data: { email: string; role: string }) => {
       const url = buildUrl(api.userRoles.create.path, { orgId });
-      const res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to add user");
-      }
+      const res = await apiRequest("POST", url, data);
       return res.json();
     },
     onSuccess: () => {
@@ -51,16 +42,7 @@ export function useUpdateUserRole(orgId: number) {
   return useMutation({
     mutationFn: async ({ roleId, role }: { roleId: number; role: string }) => {
       const url = buildUrl(api.userRoles.update.path, { orgId, id: roleId });
-      const res = await fetch(url, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role }),
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to update role");
-      }
+      const res = await apiRequest("PUT", url, { role });
       return res.json();
     },
     onSuccess: () => {
@@ -80,11 +62,7 @@ export function useDeleteUserRole(orgId: number) {
   return useMutation({
     mutationFn: async (roleId: number) => {
       const url = buildUrl(api.userRoles.delete.path, { orgId, id: roleId });
-      const res = await fetch(url, {
-        method: "DELETE",
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to remove user");
+      await apiRequest("DELETE", url);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/organizations/roles", orgId] });

@@ -1,4 +1,5 @@
 import { usePrograms } from "@/hooks/use-programs";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -53,8 +54,7 @@ export default function Programs() {
   const handleDelete = async (id: number) => {
     try {
       const url = buildUrl(api.programs.delete.path, { id });
-      const res = await fetch(url, { method: "DELETE", credentials: "include" });
-      if (!res.ok) throw new Error("Failed to delete");
+      await apiRequest("DELETE", url);
       queryClient.invalidateQueries({ queryKey: [api.programs.list.path] });
       toast({ title: "Deleted", description: "Program removed." });
     } catch {
