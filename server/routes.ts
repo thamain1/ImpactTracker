@@ -684,6 +684,41 @@ export async function registerRoutes(
     });
   });
 
+  // === Service Areas ===
+  app.get("/api/organizations/:orgId/service-areas", requireAuth, async (req, res) => {
+    const orgId = parseInt(req.params.orgId as string);
+    const areas = await storage.getServiceAreas(orgId);
+    res.json(areas);
+  });
+
+  app.post("/api/organizations/:orgId/service-areas", requireAuth, async (req, res) => {
+    const orgId = parseInt(req.params.orgId as string);
+    try {
+      const area = await storage.createServiceArea({ ...req.body, orgId });
+      res.status(201).json(area);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      res.status(400).json({ message: msg });
+    }
+  });
+
+  app.put("/api/organizations/:orgId/service-areas/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id as string);
+    try {
+      const area = await storage.updateServiceArea(id, req.body);
+      res.json(area);
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : "Unknown error";
+      res.status(400).json({ message: msg });
+    }
+  });
+
+  app.delete("/api/organizations/:orgId/service-areas/:id", requireAuth, async (req, res) => {
+    const id = parseInt(req.params.id as string);
+    await storage.deleteServiceArea(id);
+    res.status(204).send();
+  });
+
   // === AI Report Generation ===
   app.post("/api/report/ai-narrative", requireAuth, async (req, res) => {
     try {

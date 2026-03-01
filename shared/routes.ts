@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { 
+import {
   insertOrganizationSchema,
   updateOrganizationSchema,
   insertProgramSchema,
+  insertServiceAreaSchema,
   updateProgramSchema,
   insertImpactEntrySchema,
   insertUserRoleSchema,
@@ -371,6 +372,65 @@ export const api = {
             actual: z.number(),
           })),
         }),
+      },
+    },
+  },
+  serviceAreas: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/organizations/:orgId/service-areas' as const,
+      responses: {
+        200: z.array(z.object({
+          id: z.number(),
+          orgId: z.number(),
+          name: z.string(),
+          lat: z.number(),
+          lng: z.number(),
+          description: z.string().nullable(),
+          createdAt: z.any(),
+        })),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/organizations/:orgId/service-areas' as const,
+      input: insertServiceAreaSchema,
+      responses: {
+        201: z.object({
+          id: z.number(),
+          orgId: z.number(),
+          name: z.string(),
+          lat: z.number(),
+          lng: z.number(),
+          description: z.string().nullable(),
+          createdAt: z.any(),
+        }),
+        400: errorSchemas.validation,
+      },
+    },
+    update: {
+      method: 'PUT' as const,
+      path: '/api/organizations/:orgId/service-areas/:id' as const,
+      input: insertServiceAreaSchema.partial(),
+      responses: {
+        200: z.object({
+          id: z.number(),
+          orgId: z.number(),
+          name: z.string(),
+          lat: z.number(),
+          lng: z.number(),
+          description: z.string().nullable(),
+          createdAt: z.any(),
+        }),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/organizations/:orgId/service-areas/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
       },
     },
   },

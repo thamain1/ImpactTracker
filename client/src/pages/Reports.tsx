@@ -19,6 +19,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { useServiceAreas, type ServiceArea } from "@/hooks/use-service-areas";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -27,23 +28,51 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
 });
 
-function useGeocode(locations: string[]) {
+function buildGeocodeQuery(loc: string): string {
+  if (/^\d{5}$/.test(loc.trim())) return `${loc.trim()}, USA`;
+  return `${loc.trim()}, USA`;
+}
+
+function useGeocode(locations: string[], serviceAreaList: ServiceArea[]) {
   const [coords, setCoords] = useState<Record<string, [number, number]>>({});
   const fetched = useRef(new Set<string>());
 
+  // Build a normalised lookup from DB service areas (case-insensitive)
+  const serviceAreaMap = useMemo(() => {
+    const map: Record<string, [number, number]> = {};
+    serviceAreaList.forEach(sa => {
+      map[sa.name.trim().toLowerCase()] = [sa.lat, sa.lng];
+    });
+    return map;
+  }, [serviceAreaList]);
+
   useEffect(() => {
+    // Resolve from DB service areas immediately — no network call needed
+    const resolved: Record<string, [number, number]> = {};
+    locations.forEach(loc => {
+      const key = loc.trim().toLowerCase();
+      if (serviceAreaMap[key]) resolved[loc] = serviceAreaMap[key];
+    });
+    if (Object.keys(resolved).length > 0) {
+      setCoords(prev => ({ ...prev, ...resolved }));
+    }
+
+    // Geocode remaining via Nominatim
     locations.forEach(async (loc) => {
-      if (fetched.current.has(loc) || coords[loc]) return;
+      if (fetched.current.has(loc) || coords[loc] || resolved[loc]) return;
       fetched.current.add(loc);
+      const query = buildGeocodeQuery(loc);
       try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(loc)}&limit=1`);
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`
+        );
         const data = await res.json();
         if (data?.[0]) {
           setCoords(prev => ({ ...prev, [loc]: [parseFloat(data[0].lat), parseFloat(data[0].lon)] }));
         }
       } catch {}
     });
-  }, [locations]);
+  }, [locations, serviceAreaMap]);
 
   return coords;
 }
@@ -53,6 +82,7 @@ export default function Reports() {
   const { data: orgs } = useOrganizations();
   const orgId = orgs?.[0]?.id;
   const { data: programs } = usePrograms(orgId);
+  const { data: serviceAreaList = [] } = useServiceAreas(orgId);
   
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
   const [activeTab, setActiveTab] = useState<"charts" | "data">("charts");
@@ -157,7 +187,7 @@ export default function Reports() {
     return locs;
   }, [selectedProgram, entries]);
 
-  const geoCoords = useGeocode(serviceAreaLocations);
+  const geoCoords = useGeocode(serviceAreaLocations, serviceAreaList);
 
   const participantsByMonth = useMemo(() => {
     if (!entries || participantMetricNames.size === 0) return [];

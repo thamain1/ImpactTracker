@@ -1,10 +1,11 @@
 import { db } from "./db";
-import { 
-  organizations, programs, impactMetrics, impactEntries, userRoles, users, censusCache,
+import {
+  organizations, programs, impactMetrics, impactEntries, userRoles, users, censusCache, serviceAreas,
   type Organization, type Program, type ImpactMetric, type ImpactEntry, type UserRole,
   type InsertOrganization, type UpdateOrganization, type InsertProgram, type UpdateProgram,
   type InsertImpactMetric, type InsertImpactEntry,
-  type ProgramWithMetrics, type UserRoleWithUser, type CensusCache
+  type ProgramWithMetrics, type UserRoleWithUser, type CensusCache,
+  type ServiceArea, type InsertServiceArea,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -38,6 +39,11 @@ export interface IStorage {
   createImpactEntry(entry: InsertImpactEntry & { userId: string }): Promise<ImpactEntry>;
   updateImpactEntry(id: number, updates: Partial<InsertImpactEntry>): Promise<ImpactEntry | undefined>;
   getAllImpactEntries(): Promise<ImpactEntry[]>;
+
+  getServiceAreas(orgId: number): Promise<ServiceArea[]>;
+  createServiceArea(area: InsertServiceArea): Promise<ServiceArea>;
+  updateServiceArea(id: number, updates: Partial<InsertServiceArea>): Promise<ServiceArea>;
+  deleteServiceArea(id: number): Promise<void>;
 
   getCensusData(geographyLevel: string, geographyValue: string): Promise<CensusCache | undefined>;
   upsertCensusData(data: Omit<CensusCache, "id" | "fetchedAt">): Promise<CensusCache>;
@@ -214,6 +220,24 @@ export class DatabaseStorage implements IStorage {
 
   async getAllImpactEntries(): Promise<ImpactEntry[]> {
     return await db.select().from(impactEntries).orderBy(desc(impactEntries.createdAt));
+  }
+
+  async getServiceAreas(orgId: number): Promise<ServiceArea[]> {
+    return await db.select().from(serviceAreas).where(eq(serviceAreas.orgId, orgId));
+  }
+
+  async createServiceArea(area: InsertServiceArea): Promise<ServiceArea> {
+    const [created] = await db.insert(serviceAreas).values(area).returning();
+    return created;
+  }
+
+  async updateServiceArea(id: number, updates: Partial<InsertServiceArea>): Promise<ServiceArea> {
+    const [updated] = await db.update(serviceAreas).set(updates).where(eq(serviceAreas.id, id)).returning();
+    return updated;
+  }
+
+  async deleteServiceArea(id: number): Promise<void> {
+    await db.delete(serviceAreas).where(eq(serviceAreas.id, id));
   }
 
   async getCensusData(geographyLevel: string, geographyValue: string): Promise<CensusCache | undefined> {

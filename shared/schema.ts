@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, date } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, uuid, date, doublePrecision } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -70,6 +70,16 @@ export const impactEntries = pgTable("impact_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const serviceAreas = pgTable("service_areas", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  lat: doublePrecision("lat").notNull(),
+  lng: doublePrecision("lng").notNull(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const censusCache = pgTable("census_cache", {
   id: serial("id").primaryKey(),
   geographyLevel: text("geography_level").notNull(),
@@ -88,6 +98,11 @@ export const censusCache = pgTable("census_cache", {
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   userRoles: many(userRoles),
   programs: many(programs),
+  serviceAreas: many(serviceAreas),
+}));
+
+export const serviceAreasRelations = relations(serviceAreas, ({ one }) => ({
+  organization: one(organizations, { fields: [serviceAreas.orgId], references: [organizations.id] }),
 }));
 
 export const userRolesRelations = relations(userRoles, ({ one }) => ({
@@ -126,6 +141,8 @@ export const insertProgramSchema = createInsertSchema(programs, {
 export const updateProgramSchema = insertProgramSchema.partial();
 export const insertImpactMetricSchema = createInsertSchema(impactMetrics).omit({ id: true, createdAt: true });
 export const insertImpactEntrySchema = createInsertSchema(impactEntries).omit({ id: true, createdAt: true, userId: true });
+export const insertServiceAreaSchema = createInsertSchema(serviceAreas).omit({ id: true, createdAt: true });
+export const updateServiceAreaSchema = insertServiceAreaSchema.partial();
 
 // === EXPLICIT API CONTRACT TYPES ===
 
@@ -143,6 +160,9 @@ export type UpdateProgram = z.infer<typeof updateProgramSchema>;
 export type InsertImpactMetric = z.infer<typeof insertImpactMetricSchema>;
 export type InsertImpactEntry = z.infer<typeof insertImpactEntrySchema>;
 export type CensusCache = typeof censusCache.$inferSelect;
+export type ServiceArea = typeof serviceAreas.$inferSelect;
+export type InsertServiceArea = z.infer<typeof insertServiceAreaSchema>;
+export type UpdateServiceArea = z.infer<typeof updateServiceAreaSchema>;
 
 export interface ProgramWithMetrics extends Program {
   metrics: ImpactMetric[];

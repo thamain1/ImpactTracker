@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { useUserRoles, useAddUserRole, useDeleteUserRole } from "@/hooks/use-user-roles";
+import {
+  useServiceAreas,
+  useCreateServiceArea,
+  useDeleteServiceArea,
+  LA_COUNTY_SPAS,
+  type ServiceArea,
+} from "@/hooks/use-service-areas";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, MapPin, Plus } from "lucide-react";
 import { api, buildUrl } from "@shared/routes";
 
 export default function Settings() {
@@ -23,6 +30,9 @@ export default function Settings() {
   const { data: roles, isLoading: rolesLoading } = useUserRoles(orgId || 0);
   const addRole = useAddUserRole(orgId || 0);
   const deleteRole = useDeleteUserRole(orgId || 0);
+  const { data: serviceAreas = [], isLoading: areasLoading } = useServiceAreas(orgId);
+  const createArea = useCreateServiceArea(orgId || 0);
+  const deleteArea = useDeleteServiceArea(orgId || 0);
   const { toast } = useToast();
 
   const [orgForm, setOrgForm] = useState({
@@ -38,6 +48,8 @@ export default function Settings() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("can_view");
   const [saving, setSaving] = useState(false);
+  const [newArea, setNewArea] = useState({ name: "", lat: "", lng: "", description: "" });
+  const [seedingAreas, setSeedingAreas] = useState(false);
 
   useEffect(() => {
     if (org) {
@@ -64,6 +76,34 @@ export default function Settings() {
       toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAddArea = () => {
+    const lat = parseFloat(newArea.lat);
+    const lng = parseFloat(newArea.lng);
+    if (!newArea.name || isNaN(lat) || isNaN(lng)) {
+      toast({ title: "Validation error", description: "Name, latitude, and longitude are required.", variant: "destructive" });
+      return;
+    }
+    createArea.mutate(
+      { name: newArea.name.trim(), lat, lng, description: newArea.description || undefined },
+      { onSuccess: () => setNewArea({ name: "", lat: "", lng: "", description: "" }) }
+    );
+  };
+
+  const handleSeedLaSPAs = async () => {
+    if (!orgId) return;
+    setSeedingAreas(true);
+    try {
+      for (const spa of LA_COUNTY_SPAS) {
+        await createArea.mutateAsync(spa);
+      }
+      toast({ title: "Seeded", description: "LA County SPAs added as service areas." });
+    } catch {
+      toast({ title: "Error", description: "Some areas may not have been added.", variant: "destructive" });
+    } finally {
+      setSeedingAreas(false);
     }
   };
 
@@ -217,6 +257,123 @@ export default function Settings() {
               Save
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Service Areas */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5" />
+              Service Areas
+            </CardTitle>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSeedLaSPAs}
+              disabled={seedingAreas}
+              data-testid="button-seed-spas"
+            >
+              {seedingAreas ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : null}
+              Seed LA County SPAs
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Define named regions (cities, counties, SPAs, etc.) and their coordinates. These are used for map geocoding in reports.
+          </p>
+
+          {/* Add form */}
+          <div className="grid sm:grid-cols-4 gap-2 p-3 bg-muted/50 rounded-lg">
+            <div>
+              <Label className="text-xs mb-1 block">Name</Label>
+              <Input
+                placeholder="e.g. SPA 6"
+                value={newArea.name}
+                onChange={e => setNewArea(f => ({ ...f, name: e.target.value }))}
+                data-testid="input-area-name"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Latitude</Label>
+              <Input
+                placeholder="34.0549"
+                value={newArea.lat}
+                onChange={e => setNewArea(f => ({ ...f, lat: e.target.value }))}
+                data-testid="input-area-lat"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Longitude</Label>
+              <Input
+                placeholder="-118.2578"
+                value={newArea.lng}
+                onChange={e => setNewArea(f => ({ ...f, lng: e.target.value }))}
+                data-testid="input-area-lng"
+              />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">Description (optional)</Label>
+              <Input
+                placeholder="Metro LA"
+                value={newArea.description}
+                onChange={e => setNewArea(f => ({ ...f, description: e.target.value }))}
+                data-testid="input-area-desc"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              size="sm"
+              onClick={handleAddArea}
+              disabled={createArea.isPending}
+              data-testid="button-add-area"
+            >
+              {createArea.isPending ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Plus className="w-4 h-4 mr-1" />}
+              Add Area
+            </Button>
+          </div>
+
+          {/* Areas list */}
+          {areasLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-10" />
+              <Skeleton className="h-10" />
+            </div>
+          ) : serviceAreas.length > 0 ? (
+            <div className="divide-y rounded-lg border overflow-hidden">
+              {serviceAreas.map((area: ServiceArea) => (
+                <div key={area.id} className="flex items-center justify-between px-3 py-2">
+                  <div>
+                    <span className="text-sm font-medium">{area.name}</span>
+                    {area.description && (
+                      <span className="text-xs text-muted-foreground ml-2">— {area.description}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {area.lat.toFixed(4)}, {area.lng.toFixed(4)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="text-muted-foreground hover:text-destructive h-7 w-7"
+                      onClick={() => deleteArea.mutate(area.id)}
+                      data-testid={`button-delete-area-${area.id}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              No service areas defined. Add one above or seed LA County SPAs.
+            </p>
+          )}
         </CardContent>
       </Card>
 
