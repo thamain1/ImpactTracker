@@ -15,6 +15,7 @@ import { api } from "@shared/routes";
 import { getParentGeographies } from "@shared/geography";
 import { generateImpactStudyPdf } from "@/lib/generateImpactStudyPdf";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -233,28 +234,21 @@ export default function Reports() {
       }, 0);
       const participantLabel = Array.from(pdfParticipantNames).join(", ") || "Participants";
       const geoSummary = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
-      const res = await fetch("/api/report/ai-narrative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          programName: selectedProgram.name,
-          programDescription: selectedProgram.description || "",
-          programType: selectedProgram.type || "",
-          orgName: orgs[0].name,
-          orgMission: (orgs[0] as any).mission || "",
-          targetPopulation: selectedProgram.targetPopulation || "",
-          goals: selectedProgram.goals || "",
-          totalParticipants: totalPrimary,
-          primaryMetricName: participantLabel,
-          geographies: geoSummary,
-          program: selectedProgram,
-        }),
+      const res = await apiRequest("POST", "/api/report/ai-narrative", {
+        programName: selectedProgram.name,
+        programDescription: selectedProgram.description || "",
+        programType: selectedProgram.type || "",
+        orgName: orgs[0].name,
+        orgMission: (orgs[0] as any).mission || "",
+        orgVision: (orgs[0] as any).vision || "",
+        targetPopulation: selectedProgram.targetPopulation || "",
+        goals: selectedProgram.goals || "",
+        totalParticipants: totalPrimary,
+        primaryMetricName: participantLabel,
+        geographies: geoSummary,
+        program: selectedProgram,
       });
-      if (res.ok) {
-        const data = await res.json();
-        aiNarrative = data;
-      }
+      aiNarrative = await res.json();
     } catch (err) {
       console.warn("AI narrative generation failed, proceeding without AI content", err);
     }
