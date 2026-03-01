@@ -85,7 +85,7 @@ const roleUpdateSchema = z.object({
 
 // ─── Health check (no auth) ───────────────────────────────────────────────────
 
-app.get("/api/health", (c) => {
+app.get("/health", (c) => {
   return c.json({
     ok: true,
     hasSupabaseUrl: !!c.env?.SUPABASE_URL,
