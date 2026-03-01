@@ -310,7 +310,7 @@ export default function ProgramDetails() {
         <div className="space-y-6">
           <Card className="bg-primary text-primary-foreground border-none shadow-lg shadow-primary/20">
             <CardHeader>
-              <CardTitle className="text-lg">Program Health</CardTitle>
+              <CardTitle className="text-lg">Program Info</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
