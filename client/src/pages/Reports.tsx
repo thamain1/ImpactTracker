@@ -439,7 +439,17 @@ export default function Reports() {
       const narrative = await res.json();
       setAiReport(narrative);
     } catch (err) {
-      toast({ title: "Error", description: "Failed to generate report.", variant: "destructive" });
+      const rawMsg = err instanceof Error ? err.message : String(err);
+      // rawMsg is "500: {\"message\":\"...\"}"; try to extract inner message
+      let displayMsg = rawMsg;
+      try {
+        const jsonStart = rawMsg.indexOf("{");
+        if (jsonStart !== -1) {
+          const inner = JSON.parse(rawMsg.slice(jsonStart)) as { message?: string };
+          if (inner.message) displayMsg = inner.message;
+        }
+      } catch {}
+      toast({ title: "Report Generation Failed", description: displayMsg, variant: "destructive" });
     }
     setAiReportGenerating(false);
   };
