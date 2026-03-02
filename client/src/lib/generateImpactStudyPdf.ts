@@ -214,6 +214,122 @@ export function generateImpactStudyPdf(data: ReportData) {
     y += lines.length * 4.5 + 1;
   }
 
+  function drawBarChart(
+    data: { label: string; value: number }[],
+    title: string,
+    barColor: [number, number, number] = COLORS.primary,
+  ) {
+    if (data.every(d => d.value === 0)) return;
+    const plotHeight = 50;
+    const xLabelH = 10;
+    const yLabelW = 22;
+    const plotW = contentWidth - yLabelW;
+    const totalH = plotHeight + xLabelH + 14; // title + plot + labels
+    checkPageBreak(totalH);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(title, margin, y);
+    y += 6;
+
+    const maxVal = Math.max(...data.map(d => d.value), 1);
+    const chartLeft = margin + yLabelW;
+    const chartTop = y;
+
+    // Background
+    doc.setFillColor(248, 250, 252);
+    doc.rect(chartLeft, chartTop, plotW, plotHeight, "F");
+
+    // Gridlines + Y-axis labels
+    const gridCount = 4;
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    for (let i = 1; i <= gridCount; i++) {
+      const gy = chartTop + plotHeight - (plotHeight * i / gridCount);
+      doc.line(chartLeft, gy, chartLeft + plotW, gy);
+      const labelVal = Math.round(maxVal * i / gridCount);
+      const labelStr = labelVal >= 1000 ? (labelVal / 1000).toFixed(0) + "k" : labelVal.toString();
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor(...COLORS.medium);
+      doc.text(labelStr, chartLeft - 2, gy + 1.5, { align: "right" });
+    }
+
+    // Bars + X labels
+    const barGroupW = plotW / data.length;
+    const barW = Math.min(barGroupW * 0.55, 12);
+    data.forEach((d, i) => {
+      const cx = chartLeft + i * barGroupW + barGroupW / 2;
+      if (d.value > 0) {
+        const barH = plotHeight * (d.value / maxVal);
+        doc.setFillColor(...barColor);
+        doc.rect(cx - barW / 2, chartTop + plotHeight - barH, barW, barH, "F");
+      }
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6);
+      doc.setTextColor(...COLORS.medium);
+      doc.text(d.label, cx, chartTop + plotHeight + 6, { align: "center" });
+    });
+
+    // X-axis line
+    doc.setDrawColor(...COLORS.medium);
+    doc.setLineWidth(0.3);
+    doc.line(chartLeft, chartTop + plotHeight, chartLeft + plotW, chartTop + plotHeight);
+
+    y += plotHeight + xLabelH + 4;
+  }
+
+  function drawGoalActualChart(goal: number, actual: number, metricName: string) {
+    const chartH = 40;
+    const totalH = chartH + 22;
+    checkPageBreak(totalH);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.dark);
+    doc.text("Goal vs. Actual — " + metricName, margin, y);
+    y += 6;
+
+    const maxVal = Math.max(goal, actual, 1);
+    const barW = 30;
+    const gap = 20;
+    const startX = margin + 24;
+
+    // Goal bar (slate)
+    const goalH = chartH * (goal / maxVal);
+    doc.setFillColor(148, 163, 184);
+    doc.rect(startX, y + chartH - goalH, barW, goalH, "F");
+
+    // Actual bar (primary)
+    const actualH = chartH * (actual / maxVal);
+    doc.setFillColor(...COLORS.primary);
+    doc.rect(startX + barW + gap, y + chartH - actualH, barW, actualH, "F");
+
+    // X-axis
+    doc.setDrawColor(...COLORS.medium);
+    doc.setLineWidth(0.3);
+    doc.line(startX, y + chartH, startX + barW * 2 + gap, y + chartH);
+
+    // Labels under bars
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(`Goal`, startX + barW / 2, y + chartH + 5, { align: "center" });
+    doc.text(formatNumber(goal), startX + barW / 2, y + chartH + 10, { align: "center" });
+    doc.text(`Actual`, startX + barW + gap + barW / 2, y + chartH + 5, { align: "center" });
+    doc.text(formatNumber(actual), startX + barW + gap + barW / 2, y + chartH + 10, { align: "center" });
+
+    // Progress callout
+    const pct = ((actual / goal) * 100).toFixed(1);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.primary);
+    doc.text(`${pct}% of goal`, startX + barW * 2 + gap + 8, y + chartH / 2 + 1);
+
+    y += chartH + 18;
+  }
+
   // =========== COVER PAGE ===========
   doc.setFillColor(...COLORS.primary);
   doc.rect(0, 0, pageWidth, pageHeight * 0.45, "F");
@@ -492,6 +608,27 @@ export function generateImpactStudyPdf(data: ReportData) {
     tableLineWidth: 0.1,
   });
   y = (doc as any).lastAutoTable.finalY + 8;
+
+  // =========== CHARTS ===========
+  drawSectionHeader("Visual Summary");
+
+  // Participants by Month bar chart
+  const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const monthCountsChart: Record<number, number> = {};
+  entries.forEach(entry => {
+    const month = new Date(entry.date + "T00:00:00").getMonth();
+    const mv = entry.metricValues as Record<string, number>;
+    let t = 0;
+    participantMetricSet.forEach(name => { t += Number(mv[name] || 0); });
+    monthCountsChart[month] = (monthCountsChart[month] || 0) + t;
+  });
+  const monthChartData = monthNamesShort.map((label, i) => ({ label, value: monthCountsChart[i] || 0 }));
+  drawBarChart(monthChartData, `${primaryMetric} by Month`);
+
+  // Goal vs. Actual chart (only if goal target is set)
+  if (goalTarget && goalTarget > 0) {
+    drawGoalActualChart(goalTarget, totalPrimary, primaryMetric);
+  }
 
   // =========== PROGRAM REACH BY GEOGRAPHY ===========
   drawSectionHeader("Program Reach by Geography");
