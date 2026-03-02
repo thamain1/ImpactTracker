@@ -388,7 +388,7 @@ export async function generateNarrative(
         temperature: 0.1,
         topP: 0.2,
         topK: 20,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
         responseSchema: PERSONA_RESPONSE_SCHEMA,
       },
