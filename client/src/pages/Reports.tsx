@@ -452,35 +452,20 @@ export default function Reports() {
             const stateEntries  = filteredStats.filter(s => s.geographyLevel === "State");
 
             return (
-              <div className="space-y-3">
-                {/* Row 1: Total + individual SPA cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <Card data-testid="geo-card-total" className="border-primary/30 bg-primary/5">
-                    <CardContent className="p-4">
-                      <p className="text-xs text-primary font-medium uppercase">Total</p>
-                      <p className="text-2xl font-heading font-bold text-slate-900 mt-1">
-                        {(goalData?.actual ?? 0).toLocaleString()}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Participants Served</p>
-                    </CardContent>
-                  </Card>
-                  {spaEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                </div>
-
-                {/* City cards — one per named city */}
-                {cityEntries.length > 0 && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {cityEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                  </div>
-                )}
-
-                {/* County + State cards — one per named value */}
-                {(countyEntries.length > 0 || stateEntries.length > 0) && (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    {countyEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                    {stateEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                  </div>
-                )}
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
+                <Card data-testid="geo-card-total" className="border-primary/30 bg-primary/5">
+                  <CardContent className="p-4">
+                    <p className="text-xs text-primary font-medium uppercase">Total</p>
+                    <p className="text-2xl font-heading font-bold text-slate-900 mt-1">
+                      {(goalData?.actual ?? 0).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Participants Served</p>
+                  </CardContent>
+                </Card>
+                {spaEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                {cityEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                {countyEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                {stateEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
               </div>
             );
           })()}
