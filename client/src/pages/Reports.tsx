@@ -8,7 +8,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2, ChevronDown } from "lucide-react";
+import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2, ChevronDown, Sparkles } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,7 +92,7 @@ export default function Reports() {
   const { data: serviceAreaList = [] } = useServiceAreas(orgId);
   
   const [selectedProgramId, setSelectedProgramId] = useState<string>("");
-  const [activeTab, setActiveTab] = useState<"charts" | "data">("charts");
+  const [activeTab, setActiveTab] = useState<"charts" | "data" | "report">("charts");
   const [selectedYear, setSelectedYear] = useState<string>("all");
   
   useEffect(() => {
@@ -100,6 +100,10 @@ export default function Reports() {
       setSelectedProgramId(programs[0].id.toString());
     }
   }, [programs, selectedProgramId]);
+
+  useEffect(() => {
+    setAiReport(null);
+  }, [selectedProgramId, selectedYear]);
 
   const programId = parseInt(selectedProgramId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
@@ -271,6 +275,18 @@ export default function Reports() {
   const [pdfPersonaLabel, setPdfPersonaLabel] = useState<string>("");
 
   type PersonaKey = "general" | "grantmaker" | "stakeholder" | "sponsor";
+  type AiNarrativeResult = {
+    executiveSummary: string;
+    communityNeed: string;
+    programDesign: string;
+    outcomesImpact: string;
+    lessonsLearned: string;
+    callToAction: string;
+  };
+
+  const [aiReport, setAiReport] = useState<AiNarrativeResult | null>(null);
+  const [aiReportGenerating, setAiReportGenerating] = useState(false);
+  const [aiReportPersona, setAiReportPersona] = useState<PersonaKey>("general");
   const PERSONA_LABELS: Record<PersonaKey, string> = {
     general:     "General",
     grantmaker:  "Grantmaker",
@@ -363,6 +379,69 @@ export default function Reports() {
     }
     setPdfGenerating(false);
     setPdfPersonaLabel("");
+  };
+
+  const handleGenerateReport = async () => {
+    if (!selectedProgram || !orgs?.[0] || !filteredStats || !entries) {
+      toast({ title: "Not Ready", description: "Please wait for data to finish loading.", variant: "destructive" });
+      return;
+    }
+    setAiReportGenerating(true);
+    setAiReport(null);
+    try {
+      const reportParticipantNames = participantMetricNames;
+      const totalPrimary = (entries || []).reduce((sum: number, e: any) => {
+        const vals = e.metricValues as Record<string, number> | null;
+        if (!vals) return sum;
+        let t = 0;
+        reportParticipantNames.forEach(name => { t += Number(vals[name] || 0); });
+        return sum + t;
+      }, 0);
+      const participantLabel = Array.from(reportParticipantNames).join(", ") || "Participants";
+      const geoListStr = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 15);
+      const statsByGeo = (filteredStats || []).map((s: any) => {
+        let total = 0;
+        reportParticipantNames.forEach((name: string) => { total += Number(s.metrics[name] || 0); });
+        return { geography: `${s.geographyValue} (${s.geographyLevel})`, value: total };
+      }).filter((g: any) => g.value > 0).slice(0, 15);
+      const totalCensusPop = (censusData || []).reduce((sum: number, c: any) => sum + (c.totalPopulation || 0), 0);
+      const reachPercent = totalCensusPop > 0 && totalPrimary > 0
+        ? Math.round((totalPrimary / totalCensusPop) * 10000) / 100
+        : null;
+      let goalTarget: number | null = null;
+      if (selectedProgram.goals) {
+        const match = selectedProgram.goals.match(/(\d[\d,]*)/);
+        if (match) goalTarget = parseInt(match[1].replace(/,/g, ""), 10);
+      }
+      const res = await apiRequest("POST", "/api/report/ai-narrative", {
+        persona: aiReportPersona,
+        programName:        selectedProgram.name,
+        programDescription: selectedProgram.description || "",
+        programType:        selectedProgram.type || "",
+        programStatus:      selectedProgram.status || "active",
+        startDate:          selectedProgram.startDate || null,
+        endDate:            selectedProgram.endDate || null,
+        orgName:            orgs[0].name,
+        orgMission:         (orgs[0] as any).mission || "",
+        orgVision:          (orgs[0] as any).vision || "",
+        targetPopulation:   selectedProgram.targetPopulation || "",
+        goals:              selectedProgram.goals || "",
+        goalTarget,
+        totalParticipants:  totalPrimary,
+        primaryMetricName:  participantLabel,
+        geographies:        geoListStr.join(", "),
+        geographyList:      geoListStr,
+        statsByGeo,
+        reachPercent,
+        totalCost:          (selectedProgram as any).budget || 0,
+        program:            selectedProgram,
+      });
+      const narrative = await res.json();
+      setAiReport(narrative);
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to generate report.", variant: "destructive" });
+    }
+    setAiReportGenerating(false);
   };
 
   return (
@@ -473,6 +552,14 @@ export default function Reports() {
             data-testid="tab-data"
           >
             <Table2 className="w-4 h-4 mr-2" /> Raw Data
+          </Button>
+          <Button
+            variant={activeTab === "report" ? "default" : "outline"}
+            size="sm"
+            onClick={() => setActiveTab("report")}
+            data-testid="tab-report"
+          >
+            <Sparkles className="w-4 h-4 mr-2" /> AI Report
           </Button>
         </div>
       )}
@@ -1128,6 +1215,174 @@ export default function Reports() {
             </div>
           </CardContent>
         </Card>
+      ) : activeTab === "report" ? (
+        <div className="space-y-6">
+          {/* Controls */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select value={aiReportPersona} onValueChange={(v) => { setAiReportPersona(v as PersonaKey); setAiReport(null); }}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Audience" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="grantmaker">Grantmaker</SelectItem>
+                <SelectItem value="stakeholder">Stakeholder</SelectItem>
+                <SelectItem value="sponsor">Sponsor</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={handleGenerateReport} disabled={aiReportGenerating || !pdfReady} data-testid="button-generate-report">
+              {aiReportGenerating
+                ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                : <Sparkles className="w-4 h-4 mr-2" />}
+              {aiReportGenerating ? "Generating…" : "Generate Report"}
+            </Button>
+          </div>
+
+          {!aiReport && !aiReportGenerating ? (
+            <div className="h-[300px] flex flex-col items-center justify-center bg-muted/50 rounded-2xl border border-dashed gap-3 text-muted-foreground">
+              <Sparkles className="w-8 h-8 opacity-30" />
+              <p className="text-sm">Select an audience and click Generate Report to preview your AI narrative with charts.</p>
+            </div>
+          ) : aiReportGenerating ? (
+            <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+              <p className="text-sm">Generating your report…</p>
+            </div>
+          ) : aiReport ? (
+            <div className="space-y-6">
+
+              {/* Executive Summary */}
+              <Card data-testid="report-executive-summary">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg">Executive Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.executiveSummary}</p>
+                </CardContent>
+              </Card>
+
+              {/* Outcomes & Impact — paired with charts */}
+              <div className="grid lg:grid-cols-2 gap-6 items-start">
+                <Card data-testid="report-outcomes-impact">
+                  <CardHeader>
+                    <CardTitle className="font-heading text-lg flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-primary" />
+                      Outcomes &amp; Impact
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm leading-relaxed text-slate-700">{aiReport.outcomesImpact}</p>
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-4">
+                  {/* Participants by Month */}
+                  <Card data-testid="report-chart-participation">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-base font-heading">Participants by Month</CardTitle>
+                    </CardHeader>
+                    <CardContent className="h-[220px]">
+                      {participantsByMonth.some(m => m.count > 0) ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={participantsByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
+                            <defs>
+                              <linearGradient id="colorCountReport" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3}/>
+                                <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                            <Area type="monotone" dataKey="count" name={primaryMetric || "Participants"} stroke="#0d9488" strokeWidth={2} fillOpacity={1} fill="url(#colorCountReport)" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      ) : (
+                        <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No monthly data available</div>
+                      )}
+                    </CardContent>
+                  </Card>
+
+                  {/* Goal vs. Actual */}
+                  {goalData && goalData.goalTarget !== null && (
+                    <Card data-testid="report-chart-goal">
+                      <CardHeader className="pb-2">
+                        <CardTitle className="text-base font-heading flex items-center gap-2">
+                          <Target className="w-4 h-4 text-primary" />
+                          Goal vs. Actual
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="h-[220px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={[{ name: selectedProgram?.name || "Program", goal: goalData.goalTarget, actual: goalData.actual }]}
+                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
+                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                            <Legend />
+                            <Bar dataKey="goal" name="Goal" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="actual" name="Actual" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </div>
+
+              {/* Community Need */}
+              <Card data-testid="report-community-need">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <Users className="w-5 h-5 text-primary" />
+                    Community Need
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.communityNeed}</p>
+                </CardContent>
+              </Card>
+
+              {/* Program Design */}
+              <Card data-testid="report-program-design">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <ClipboardList className="w-5 h-5 text-primary" />
+                    Program Design
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.programDesign}</p>
+                </CardContent>
+              </Card>
+
+              {/* Lessons Learned */}
+              <Card data-testid="report-lessons-learned">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg">Lessons Learned</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.lessonsLearned}</p>
+                </CardContent>
+              </Card>
+
+              {/* Call to Action */}
+              <Card className="border-primary/30 bg-primary/5" data-testid="report-call-to-action">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg text-primary">Call to Action</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.callToAction}</p>
+                </CardContent>
+              </Card>
+
+            </div>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );
