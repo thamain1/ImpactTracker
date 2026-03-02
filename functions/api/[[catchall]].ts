@@ -954,22 +954,40 @@ app.post("/api/report/ai-narrative", async (c) => {
     const apiKey = c.env.GEMINI_API_KEY;
     if (!apiKey) return c.json({ message: "Gemini API key not configured" }, 400);
     const body = await c.req.json();
+
+    const validPersonas = ["general", "grantmaker", "stakeholder", "sponsor"] as const;
+    type PersonaKey = typeof validPersonas[number];
+    const persona: PersonaKey | undefined = validPersonas.includes(body.persona)
+      ? body.persona as PersonaKey
+      : undefined;
+
+    // Parse numeric costPerParticipant if provided as string
+    const cppRaw: string | null = body.program?.costPerParticipant || null;
+
     const narrative = await generateNarrative(apiKey, {
-      programName:        body.programName        || body.program?.name         || "",
-      programDescription: body.programDescription || body.program?.description  || "",
-      programType:        body.programType        || body.program?.type         || "General",
-      orgName:            body.orgName            || body.org?.name             || "",
-      orgMission:         body.orgMission         || body.org?.mission          || "",
-      orgVision:          body.orgVision          || body.org?.vision           || "",
-      targetPopulation:   body.targetPopulation   || body.program?.targetPopulation || "",
-      goals:              body.goals              || body.program?.goals        || "",
-      totalParticipants:  body.totalParticipants  || body.totalPrimary          || 0,
+      programName:        body.programName        || body.program?.name              || "",
+      programDescription: body.programDescription || body.program?.description       || "",
+      programType:        body.programType        || body.program?.type              || "General",
+      programStatus:      body.programStatus      || body.program?.status            || "unknown",
+      startDate:          body.startDate          || body.program?.startDate         || null,
+      endDate:            body.endDate            || body.program?.endDate           || null,
+      orgName:            body.orgName            || body.org?.name                  || "",
+      orgMission:         body.orgMission         || body.org?.mission               || "",
+      orgVision:          body.orgVision          || body.org?.vision                || "",
+      targetPopulation:   body.targetPopulation   || body.program?.targetPopulation  || "",
+      goals:              body.goals              || body.program?.goals             || "",
+      goalTarget:         body.goalTarget         ?? null,
+      totalParticipants:  body.totalParticipants  || body.totalPrimary               || 0,
       primaryMetricName:  body.primaryMetricName  || "",
       geographies:        body.geographies        || "",
-      totalCost:          body.totalCost          || body.program?.totalCost    || 0,
-      costPerParticipant: body.program?.costPerParticipant || null,
+      geographyList:      Array.isArray(body.geographyList) ? body.geographyList    : [],
+      statsByGeo:         Array.isArray(body.statsByGeo)    ? body.statsByGeo       : null,
+      reachPercent:       body.reachPercent       ?? null,
+      totalCost:          body.totalCost          || body.program?.totalCost         || 0,
+      costPerParticipant: cppRaw,
       metrics:            body.program?.metrics   || [],
-    });
+    }, persona);
+
     return c.json(narrative);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

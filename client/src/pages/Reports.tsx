@@ -8,7 +8,15 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2 } from "lucide-react";
+import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { api } from "@shared/routes";
@@ -260,13 +268,23 @@ export default function Reports() {
 
   const pdfReady = !!(selectedProgram && orgs?.[0] && filteredStats && entries && !statsLoading);
   const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [pdfPersonaLabel, setPdfPersonaLabel] = useState<string>("");
 
-  const handlePdfDownload = async () => {
+  type PersonaKey = "general" | "grantmaker" | "stakeholder" | "sponsor";
+  const PERSONA_LABELS: Record<PersonaKey, string> = {
+    general:     "General",
+    grantmaker:  "Grantmaker",
+    stakeholder: "Stakeholder",
+    sponsor:     "Sponsor",
+  };
+
+  const handlePdfDownload = async (persona: PersonaKey) => {
     if (!selectedProgram || !orgs?.[0] || !filteredStats || !entries) {
       toast({ title: "Not Ready", description: "Please wait for data to finish loading before downloading.", variant: "destructive" });
       return;
     }
     setPdfGenerating(true);
+    setPdfPersonaLabel(PERSONA_LABELS[persona]);
     let aiNarrative = undefined;
     try {
       const pdfParticipantNames = participantMetricNames;
@@ -278,20 +296,51 @@ export default function Reports() {
         return sum + t;
       }, 0);
       const participantLabel = Array.from(pdfParticipantNames).join(", ") || "Participants";
-      const geoSummary = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 10).join(", ");
+
+      // Build geography list and per-geo breakdown for structured persona input
+      const geoList = (filteredStats || []).map((s: any) => `${s.geographyValue} (${s.geographyLevel})`).slice(0, 15);
+      const geoSummary = geoList.join(", ");
+      const statsByGeo = (filteredStats || []).map((s: any) => {
+        let total = 0;
+        pdfParticipantNames.forEach((name: string) => { total += Number(s.metrics[name] || 0); });
+        return { geography: `${s.geographyValue} (${s.geographyLevel})`, value: total };
+      }).filter((g: any) => g.value > 0).slice(0, 15);
+
+      // Compute reach percent from census data if available
+      const totalCensusPop = (censusData || []).reduce((sum: number, c: any) => sum + (c.totalPopulation || 0), 0);
+      const reachPercent = totalCensusPop > 0 && totalPrimary > 0
+        ? Math.round((totalPrimary / totalCensusPop) * 10000) / 100
+        : null;
+
+      // Extract numeric goal target
+      let goalTarget: number | null = null;
+      if (selectedProgram.goals) {
+        const match = selectedProgram.goals.match(/(\d[\d,]*)/);
+        if (match) goalTarget = parseInt(match[1].replace(/,/g, ""), 10);
+      }
+
       const res = await apiRequest("POST", "/api/report/ai-narrative", {
-        programName: selectedProgram.name,
+        persona,
+        programName:        selectedProgram.name,
         programDescription: selectedProgram.description || "",
-        programType: selectedProgram.type || "",
-        orgName: orgs[0].name,
-        orgMission: (orgs[0] as any).mission || "",
-        orgVision: (orgs[0] as any).vision || "",
-        targetPopulation: selectedProgram.targetPopulation || "",
-        goals: selectedProgram.goals || "",
-        totalParticipants: totalPrimary,
-        primaryMetricName: participantLabel,
-        geographies: geoSummary,
-        program: selectedProgram,
+        programType:        selectedProgram.type || "",
+        programStatus:      selectedProgram.status || "active",
+        startDate:          selectedProgram.startDate || null,
+        endDate:            selectedProgram.endDate || null,
+        orgName:            orgs[0].name,
+        orgMission:         (orgs[0] as any).mission || "",
+        orgVision:          (orgs[0] as any).vision || "",
+        targetPopulation:   selectedProgram.targetPopulation || "",
+        goals:              selectedProgram.goals || "",
+        goalTarget,
+        totalParticipants:  totalPrimary,
+        primaryMetricName:  participantLabel,
+        geographies:        geoSummary,
+        geographyList:      geoList,
+        statsByGeo,
+        reachPercent,
+        totalCost:          (selectedProgram as any).budget || 0,
+        program:            selectedProgram,
       });
       aiNarrative = await res.json();
     } catch (err) {
@@ -307,11 +356,13 @@ export default function Reports() {
         entries: (entries || []) as any,
         aiNarrative,
       });
-      toast({ title: "PDF Generated", description: aiNarrative ? "Impact Study PDF with AI narrative has been downloaded." : "Impact Study PDF has been downloaded." });
+      const personaLabel = PERSONA_LABELS[persona];
+      toast({ title: "PDF Generated", description: aiNarrative ? `${personaLabel} Impact Study PDF with AI narrative downloaded.` : "Impact Study PDF downloaded." });
     } catch (err) {
       toast({ title: "Error", description: "Failed to generate PDF.", variant: "destructive" });
     }
     setPdfGenerating(false);
+    setPdfPersonaLabel("");
   };
 
   return (
@@ -348,10 +399,53 @@ export default function Reports() {
           )}
           {selectedProgramId && (
             <>
-              <Button variant="outline" onClick={handlePdfDownload} disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
-                {pdfGenerating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
-                {pdfGenerating ? "Generating AI Report..." : "Impact Study PDF"}
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
+                    {pdfGenerating
+                      ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      : <FileText className="w-4 h-4 mr-2" />}
+                    {pdfGenerating
+                      ? `Generating ${pdfPersonaLabel} Report...`
+                      : "Impact Study PDF"}
+                    {!pdfGenerating && <ChevronDown className="w-3.5 h-3.5 ml-1.5 opacity-60" />}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                    Choose audience
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handlePdfDownload("general")} data-testid="pdf-persona-general">
+                    <FileText className="w-4 h-4 mr-2 text-slate-500" />
+                    <div>
+                      <p className="font-medium text-sm">General</p>
+                      <p className="text-xs text-muted-foreground">Public-facing, warm &amp; data-driven</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlePdfDownload("grantmaker")} data-testid="pdf-persona-grantmaker">
+                    <FileText className="w-4 h-4 mr-2 text-blue-500" />
+                    <div>
+                      <p className="font-medium text-sm">Grantmaker</p>
+                      <p className="text-xs text-muted-foreground">Grant-ready, accountability-focused</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlePdfDownload("stakeholder")} data-testid="pdf-persona-stakeholder">
+                    <FileText className="w-4 h-4 mr-2 text-emerald-500" />
+                    <div>
+                      <p className="font-medium text-sm">Stakeholder</p>
+                      <p className="text-xs text-muted-foreground">Board &amp; team, plain-language</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handlePdfDownload("sponsor")} data-testid="pdf-persona-sponsor">
+                    <FileText className="w-4 h-4 mr-2 text-amber-500" />
+                    <div>
+                      <p className="font-medium text-sm">Sponsor</p>
+                      <p className="text-xs text-muted-foreground">CSR &amp; corporate partnership</p>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button variant="outline" onClick={handleCsvDownload} data-testid="button-download-csv">
                 <Download className="w-4 h-4 mr-2" />
                 Export CSV
