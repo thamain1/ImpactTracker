@@ -1238,150 +1238,164 @@ export default function Reports() {
             </Button>
           </div>
 
-          {!aiReport && !aiReportGenerating ? (
-            <div className="h-[300px] flex flex-col items-center justify-center bg-muted/50 rounded-2xl border border-dashed gap-3 text-muted-foreground">
-              <Sparkles className="w-8 h-8 opacity-30" />
-              <p className="text-sm">Select an audience and click Generate Report to preview your AI narrative with charts.</p>
-            </div>
-          ) : aiReportGenerating ? (
-            <div className="h-[300px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
-              <p className="text-sm">Generating your report…</p>
-            </div>
-          ) : aiReport ? (
-            <div className="space-y-6">
+          {/* Charts — always visible */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Card data-testid="report-chart-participation">
+              <CardHeader>
+                <CardTitle className="font-heading text-lg">Participants by Month</CardTitle>
+              </CardHeader>
+              <CardContent className="h-[300px]">
+                {participantsByMonth.some(m => m.count > 0) ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={participantsByMonth} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorCountReport" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="month" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      <Area type="monotone" dataKey="count" name={primaryMetric || "Participants"} stroke="#0d9488" strokeWidth={2} fillOpacity={1} fill="url(#colorCountReport)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-muted-foreground">No monthly data available</div>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* Executive Summary */}
-              <Card data-testid="report-executive-summary">
+            {goalData && goalData.goalTarget !== null ? (
+              <Card data-testid="report-chart-goal">
                 <CardHeader>
-                  <CardTitle className="font-heading text-lg">Executive Summary</CardTitle>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <Target className="w-5 h-5 text-primary" />
+                    Goal vs. Actual
+                  </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.executiveSummary}</p>
+                <CardContent className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={[{ name: selectedProgram?.name || "Program", goal: goalData.goalTarget, actual: goalData.actual }]}
+                      margin={{ top: 10, right: 30, left: 0, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="name" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                      <YAxis stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                      <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      <Legend />
+                      <Bar dataKey="goal" name="Goal" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="actual" name="Actual" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
               </Card>
-
-              {/* Outcomes & Impact — paired with charts */}
-              <div className="grid lg:grid-cols-2 gap-6 items-start">
-                <Card data-testid="report-outcomes-impact">
-                  <CardHeader>
-                    <CardTitle className="font-heading text-lg flex items-center gap-2">
-                      <TrendingUp className="w-5 h-5 text-primary" />
-                      Outcomes &amp; Impact
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm leading-relaxed text-slate-700">{aiReport.outcomesImpact}</p>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                  {/* Participants by Month */}
-                  <Card data-testid="report-chart-participation">
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-base font-heading">Participants by Month</CardTitle>
-                    </CardHeader>
-                    <CardContent className="h-[220px]">
-                      {participantsByMonth.some(m => m.count > 0) ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={participantsByMonth} margin={{ top: 5, right: 20, left: 0, bottom: 0 }}>
-                            <defs>
-                              <linearGradient id="colorCountReport" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#0d9488" stopOpacity={0.3}/>
-                                <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="month" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Area type="monotone" dataKey="count" name={primaryMetric || "Participants"} stroke="#0d9488" strokeWidth={2} fillOpacity={1} fill="url(#colorCountReport)" />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-muted-foreground text-sm">No monthly data available</div>
-                      )}
-                    </CardContent>
-                  </Card>
-
-                  {/* Goal vs. Actual */}
-                  {goalData && goalData.goalTarget !== null && (
-                    <Card data-testid="report-chart-goal">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-base font-heading flex items-center gap-2">
-                          <Target className="w-4 h-4 text-primary" />
-                          Goal vs. Actual
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="h-[220px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart
-                            data={[{ name: selectedProgram?.name || "Program", goal: goalData.goalTarget, actual: goalData.actual }]}
-                            margin={{ top: 5, right: 20, left: 0, bottom: 5 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                            <XAxis dataKey="name" stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={false} />
-                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                            <Legend />
-                            <Bar dataKey="goal" name="Goal" fill="#94a3b8" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="actual" name="Actual" fill="#0d9488" radius={[4, 4, 0, 0]} />
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </CardContent>
-                    </Card>
+            ) : (
+              <Card data-testid="report-chart-populations">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-primary" />
+                    Program Target &amp; Populations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {totalCensusPop > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Census Population</span>
+                        <span className="font-bold text-slate-900">{totalCensusPop.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Total Impact</span>
+                        <span className="font-bold text-primary">{totalImpact.toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-muted-foreground">Population Reached</span>
+                        <span className="font-bold text-emerald-600">
+                          {totalImpact > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
+                        <div className="bg-primary rounded-full h-2.5 transition-all"
+                          style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }} />
+                      </div>
+                    </div>
                   )}
-                </div>
+                  {!totalCensusPop && <p className="text-sm text-muted-foreground italic">No population data available</p>}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* AI Narrative — shown after generation */}
+          {!aiReport && !aiReportGenerating && (
+            <div className="h-[120px] flex flex-col items-center justify-center bg-muted/50 rounded-2xl border border-dashed gap-2 text-muted-foreground">
+              <Sparkles className="w-6 h-6 opacity-30" />
+              <p className="text-sm">Select an audience and click Generate Report to add AI narrative below the charts.</p>
+            </div>
+          )}
+
+          {aiReportGenerating && (
+            <div className="h-[120px] flex flex-col items-center justify-center gap-3 text-muted-foreground">
+              <Loader2 className="w-7 h-7 animate-spin text-primary" />
+              <p className="text-sm">Generating narrative…</p>
+            </div>
+          )}
+
+          {aiReport && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 pt-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <h2 className="text-lg font-heading font-semibold text-slate-900">
+                  AI Narrative — {PERSONA_LABELS[aiReportPersona]}
+                </h2>
               </div>
 
-              {/* Community Need */}
+              <Card data-testid="report-executive-summary">
+                <CardHeader><CardTitle className="font-heading text-lg">Executive Summary</CardTitle></CardHeader>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.executiveSummary}</p></CardContent>
+              </Card>
+
+              <Card data-testid="report-outcomes-impact">
+                <CardHeader>
+                  <CardTitle className="font-heading text-lg flex items-center gap-2">
+                    <TrendingUp className="w-5 h-5 text-primary" />Outcomes &amp; Impact
+                  </CardTitle>
+                </CardHeader>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.outcomesImpact}</p></CardContent>
+              </Card>
+
               <Card data-testid="report-community-need">
                 <CardHeader>
                   <CardTitle className="font-heading text-lg flex items-center gap-2">
-                    <Users className="w-5 h-5 text-primary" />
-                    Community Need
+                    <Users className="w-5 h-5 text-primary" />Community Need
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.communityNeed}</p>
-                </CardContent>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.communityNeed}</p></CardContent>
               </Card>
 
-              {/* Program Design */}
               <Card data-testid="report-program-design">
                 <CardHeader>
                   <CardTitle className="font-heading text-lg flex items-center gap-2">
-                    <ClipboardList className="w-5 h-5 text-primary" />
-                    Program Design
+                    <ClipboardList className="w-5 h-5 text-primary" />Program Design
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.programDesign}</p>
-                </CardContent>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.programDesign}</p></CardContent>
               </Card>
 
-              {/* Lessons Learned */}
               <Card data-testid="report-lessons-learned">
-                <CardHeader>
-                  <CardTitle className="font-heading text-lg">Lessons Learned</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.lessonsLearned}</p>
-                </CardContent>
+                <CardHeader><CardTitle className="font-heading text-lg">Lessons Learned</CardTitle></CardHeader>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.lessonsLearned}</p></CardContent>
               </Card>
 
-              {/* Call to Action */}
               <Card className="border-primary/30 bg-primary/5" data-testid="report-call-to-action">
-                <CardHeader>
-                  <CardTitle className="font-heading text-lg text-primary">Call to Action</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm leading-relaxed text-slate-700">{aiReport.callToAction}</p>
-                </CardContent>
+                <CardHeader><CardTitle className="font-heading text-lg text-primary">Call to Action</CardTitle></CardHeader>
+                <CardContent><p className="text-sm leading-relaxed text-slate-700">{aiReport.callToAction}</p></CardContent>
               </Card>
-
             </div>
-          ) : null}
+          )}
         </div>
       ) : null}
     </div>
