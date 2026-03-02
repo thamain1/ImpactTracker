@@ -559,7 +559,7 @@ export default function Reports() {
             onClick={() => setActiveTab("report")}
             data-testid="tab-report"
           >
-            <Sparkles className="w-4 h-4 mr-2" /> AI Report
+            <Sparkles className="w-4 h-4 mr-2" /> Preview
           </Button>
         </div>
       )}
