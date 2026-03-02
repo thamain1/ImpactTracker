@@ -48,4 +48,4 @@ callToAction
 - Close by reiterating mission/vision if provided.
 
 OUTPUT
-Return ONLY valid JSON matching the responseSchema. Include narrative in report.* and auditing details in qa.* fields. Do not include any additional keys.`;
+Return ONLY valid JSON with exactly these six fields: executiveSummary, communityNeed, programDesign, outcomesImpact, lessonsLearned, callToAction. No additional keys.`;

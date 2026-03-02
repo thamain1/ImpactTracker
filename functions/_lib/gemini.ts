@@ -177,7 +177,7 @@ export async function generateNarrative(
   // ── Persona path (structured JSON input + persona system prompt) ──────────
   if (persona && PERSONA_SYSTEM_PROMPTS[persona]) {
     const structuredInput = buildPersonaInputJson(input);
-    const userPrompt = `INPUT_JSON:\n${JSON.stringify(structuredInput, null, 2)}\n\nINSTRUCTIONS:\n- Use only the data in INPUT_JSON.\n- If a value is missing, omit it smoothly.\n- Populate qa.missingOrEmptyFields with the input paths that are missing/empty.\n- Set qa.complianceChecklist booleans truthfully; if any are false, add a note in qa.redFlags.\n\nReturn JSON only.`;
+    const userPrompt = `INPUT_JSON:\n${JSON.stringify(structuredInput, null, 2)}\n\nINSTRUCTIONS:\n- Use only the data in INPUT_JSON.\n- If a value is missing or empty, write around it naturally — do not mention it is missing.\n- Return JSON only with the six narrative fields.`;
 
     const body = {
       system_instruction: { parts: [{ text: PERSONA_SYSTEM_PROMPTS[persona] }] },
@@ -186,9 +186,9 @@ export async function generateNarrative(
         temperature: 0.1,
         topP: 0.2,
         topK: 20,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 16384,
         responseMimeType: "application/json",
-        responseSchema: PERSONA_RESPONSE_SCHEMA,
+        responseSchema: RESPONSE_SCHEMA,
       },
     };
 
@@ -206,8 +206,7 @@ export async function generateNarrative(
     const data = await res.json() as any;
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error("No text in Gemini response");
-    const parsed = JSON.parse(text) as { report: AiNarrative; qa: any };
-    return parsed.report;
+    return JSON.parse(text) as AiNarrative;
   }
 
   // ── Legacy path (flat text prompt, original behavior) ────────────────────
