@@ -23,6 +23,13 @@ import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, EyeOff, MapPin
 import { supabase } from "@/lib/supabase";
 import { api, buildUrl } from "@shared/routes";
 
+function displayName(user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined): string {
+  if (!user) return "Unknown";
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  if (full.trim()) return full;
+  return user.email?.split("@")[0] ?? "Unknown";
+}
+
 export default function Settings() {
   const { data: orgs, isLoading: orgsLoading } = useOrganizations();
   const org = orgs?.[0];
@@ -612,12 +619,12 @@ export default function Settings() {
                   <div className="flex items-center gap-3">
                     <Avatar className="h-9 w-9">
                       <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
-                        {role.user?.firstName?.[0] || "?"}{role.user?.lastName?.[0] || ""}
+                        {displayName(role.user)[0]?.toUpperCase() || "?"}
                       </AvatarFallback>
                     </Avatar>
                     <div>
                       <p className="text-sm font-medium">
-                        {role.user?.firstName} {role.user?.lastName}
+                        {displayName(role.user)}
                       </p>
                       <p className="text-xs text-muted-foreground">{role.user?.email || "No email"}</p>
                     </div>

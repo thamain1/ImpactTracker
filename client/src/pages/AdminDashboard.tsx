@@ -9,6 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Building2, FolderOpen, FileBarChart, Users, Trash2, Shield } from "lucide-react";
 import { format } from "date-fns";
 
+function displayName(user: { firstName?: string | null; lastName?: string | null; email?: string | null } | null | undefined): string {
+  if (!user) return "Unknown";
+  const full = [user.firstName, user.lastName].filter(Boolean).join(" ");
+  if (full.trim()) return full;
+  return user.email?.split("@")[0] ?? "Unknown";
+}
+
 const ROLE_LABELS: Record<string, string> = {
   admin: "Admin",
   can_edit: "Can Edit",
@@ -115,7 +122,7 @@ export default function AdminDashboard() {
                           <td className="p-3">
                             <div>
                               <p className="font-medium text-sm text-slate-800">
-                                {r.user?.firstName || ""} {r.user?.lastName || ""}
+                                {displayName(r.user)}
                               </p>
                               <p className="text-xs text-muted-foreground">{r.user?.email || "Unknown"}</p>
                             </div>

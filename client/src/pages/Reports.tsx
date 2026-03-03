@@ -274,7 +274,7 @@ export default function Reports() {
   const [pdfGenerating, setPdfGenerating] = useState(false);
   const [pdfPersonaLabel, setPdfPersonaLabel] = useState<string>("");
 
-  type PersonaKey = "general" | "grantmaker" | "stakeholder" | "sponsor";
+  type PersonaKey = "general";
   type AiNarrativeResult = {
     executiveSummary: string;
     communityNeed: string;
@@ -286,12 +286,9 @@ export default function Reports() {
 
   const [aiReport, setAiReport] = useState<AiNarrativeResult | null>(null);
   const [aiReportGenerating, setAiReportGenerating] = useState(false);
-  const [aiReportPersona, setAiReportPersona] = useState<PersonaKey>("general");
+  const aiReportPersona: PersonaKey = "general";
   const PERSONA_LABELS: Record<PersonaKey, string> = {
-    general:     "General",
-    grantmaker:  "Grantmaker",
-    stakeholder: "Stakeholder",
-    sponsor:     "Sponsor",
+    general: "General",
   };
 
   const handlePdfDownload = async (persona: PersonaKey) => {
@@ -501,36 +498,11 @@ export default function Reports() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-52">
-                  <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-                    Choose audience
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handlePdfDownload("general")} data-testid="pdf-persona-general">
                     <FileText className="w-4 h-4 mr-2 text-slate-500" />
                     <div>
                       <p className="font-medium text-sm">General</p>
                       <p className="text-xs text-muted-foreground">Public-facing, warm &amp; data-driven</p>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handlePdfDownload("grantmaker")} data-testid="pdf-persona-grantmaker">
-                    <FileText className="w-4 h-4 mr-2 text-blue-500" />
-                    <div>
-                      <p className="font-medium text-sm">Grantmaker</p>
-                      <p className="text-xs text-muted-foreground">Grant-ready, accountability-focused</p>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handlePdfDownload("stakeholder")} data-testid="pdf-persona-stakeholder">
-                    <FileText className="w-4 h-4 mr-2 text-emerald-500" />
-                    <div>
-                      <p className="font-medium text-sm">Stakeholder</p>
-                      <p className="text-xs text-muted-foreground">Board &amp; team, plain-language</p>
-                    </div>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => handlePdfDownload("sponsor")} data-testid="pdf-persona-sponsor">
-                    <FileText className="w-4 h-4 mr-2 text-amber-500" />
-                    <div>
-                      <p className="font-medium text-sm">Sponsor</p>
-                      <p className="text-xs text-muted-foreground">CSR &amp; corporate partnership</p>
                     </div>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -1229,17 +1201,9 @@ export default function Reports() {
         <div className="space-y-6">
           {/* Controls */}
           <div className="flex items-center gap-3 flex-wrap">
-            <Select value={aiReportPersona} onValueChange={(v) => { setAiReportPersona(v as PersonaKey); setAiReport(null); }}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Audience" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="general">General</SelectItem>
-                <SelectItem value="grantmaker">Grantmaker</SelectItem>
-                <SelectItem value="stakeholder">Stakeholder</SelectItem>
-                <SelectItem value="sponsor">Sponsor</SelectItem>
-              </SelectContent>
-            </Select>
+            <span className="text-sm font-medium text-slate-600 px-3 py-1.5 rounded-md border border-slate-200 bg-slate-50">
+              General
+            </span>
             <Button onClick={handleGenerateReport} disabled={aiReportGenerating || !pdfReady} data-testid="button-generate-report">
               {aiReportGenerating
                 ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />

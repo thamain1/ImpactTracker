@@ -136,8 +136,8 @@ export default function Dashboard() {
             <FileBarChart className="w-5 h-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-heading font-bold text-slate-900" data-testid="text-total-reports">{totalEntries}</div>
-            <p className="text-xs text-muted-foreground">entries recorded</p>
+            <div className="text-4xl font-heading font-bold text-slate-900" data-testid="text-total-reports">{adminStats?.totalPrograms || 0}</div>
+            <p className="text-xs text-muted-foreground">programs tracked</p>
           </CardContent>
         </Card>
 
@@ -172,80 +172,106 @@ export default function Dashboard() {
       {censusLoading && (
         <div>
           <Skeleton className="h-6 w-48 mb-4" />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid sm:grid-cols-3 gap-4">
             <Skeleton className="h-36 rounded-xl" />
             <Skeleton className="h-36 rounded-xl" />
             <Skeleton className="h-36 rounded-xl" />
           </div>
         </div>
       )}
-      {censusComparison && censusComparison.length > 0 && (
-        <div>
-          <h2 className="text-lg font-heading font-bold text-slate-900 mb-4 flex items-center gap-2">
-            <Globe2 className="w-5 h-5 text-primary" /> Census Comparison
-          </h2>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {censusComparison.map((item: CensusComparisonWithImpact) => (
-              <Card key={`${item.geographyLevel}:${item.geographyValue}`} data-testid={`census-card-${item.geographyLevel}-${item.geographyValue}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge variant="outline" className="text-xs">
-                      {item.geographyLevel}
-                    </Badge>
-                    {item.isApproximate && (
-                      <span className="text-[10px] text-muted-foreground italic">est.</span>
-                    )}
+      {censusComparison && censusComparison.length > 0 && (() => {
+        const cityItems  = censusComparison.filter((c: CensusComparisonWithImpact) => c.geographyLevel === "City");
+        const countyItem = censusComparison.find((c: CensusComparisonWithImpact) => c.geographyLevel === "County") ?? null;
+        const stateItem  = censusComparison.find((c: CensusComparisonWithImpact) => c.geographyLevel === "State") ?? null;
+        const spaItems   = censusComparison.filter((c: CensusComparisonWithImpact) => c.geographyLevel === "SPA");
+        const primaryCity = cityItems.reduce<CensusComparisonWithImpact | null>(
+          (best, cur) => (!best || (cur.totalPopulation ?? 0) > (best.totalPopulation ?? 0)) ? cur : best,
+          null
+        );
+        const topCards = [primaryCity, countyItem, stateItem].filter(Boolean) as CensusComparisonWithImpact[];
+
+        const CensusCard = ({ item }: { item: CensusComparisonWithImpact }) => (
+          <Card key={`${item.geographyLevel}:${item.geographyValue}`} data-testid={`census-card-${item.geographyLevel}-${item.geographyValue}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <Badge variant="outline" className="text-xs">
+                  {item.geographyLevel}
+                </Badge>
+                {item.isApproximate && (
+                  <span className="text-[10px] text-muted-foreground italic">est.</span>
+                )}
+              </div>
+              <p className="font-heading font-bold text-sm text-slate-800 mb-3">{item.geographyValue}</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Impact Count</span>
+                  <span className="font-bold text-sm text-slate-900">{item.impactCount.toLocaleString()}</span>
+                </div>
+                {item.totalPopulation && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Population</span>
+                    <span className="font-medium text-sm text-slate-700">{item.totalPopulation.toLocaleString()}</span>
                   </div>
-                  <p className="font-heading font-bold text-sm text-slate-800 mb-3">{item.geographyValue}</p>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-muted-foreground">Impact Count</span>
-                      <span className="font-bold text-sm text-slate-900">{item.impactCount.toLocaleString()}</span>
+                )}
+                {item.reachPercent !== null && (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-muted-foreground">Population Reach</span>
+                      <span className={`font-bold text-sm ${item.reachPercent >= 1 ? "text-emerald-600" : "text-amber-600"}`}>
+                        {item.reachPercent}%
+                      </span>
                     </div>
-                    {item.totalPopulation && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Population</span>
-                        <span className="font-medium text-sm text-slate-700">{item.totalPopulation.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {item.reachPercent !== null && (
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs text-muted-foreground">Population Reach</span>
-                          <span className={`font-bold text-sm ${item.reachPercent >= 1 ? "text-emerald-600" : "text-amber-600"}`}>
-                            {item.reachPercent}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-100 rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full transition-all ${item.reachPercent >= 1 ? "bg-emerald-500" : "bg-amber-500"}`}
-                            style={{ width: `${Math.min(item.reachPercent, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    {item.povertyRate !== null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Poverty Rate</span>
-                        <span className="font-medium text-xs text-slate-600">{item.povertyRate}%</span>
-                      </div>
-                    )}
-                    {item.medianIncome !== null && (
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-muted-foreground">Median Income</span>
-                        <span className="font-medium text-xs text-slate-600">${item.medianIncome.toLocaleString()}</span>
-                      </div>
-                    )}
+                    <div className="w-full bg-slate-100 rounded-full h-1.5">
+                      <div
+                        className={`h-1.5 rounded-full transition-all ${item.reachPercent >= 1 ? "bg-emerald-500" : "bg-amber-500"}`}
+                        style={{ width: `${Math.min(item.reachPercent, 100)}%` }}
+                      />
+                    </div>
                   </div>
-                  {item.dataYear && (
-                    <p className="text-[10px] text-muted-foreground mt-2">ACS {item.dataYear} data</p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+                )}
+                {item.povertyRate !== null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Poverty Rate</span>
+                    <span className="font-medium text-xs text-slate-600">{item.povertyRate}%</span>
+                  </div>
+                )}
+                {item.medianIncome !== null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Median Income</span>
+                    <span className="font-medium text-xs text-slate-600">${item.medianIncome.toLocaleString()}</span>
+                  </div>
+                )}
+              </div>
+              {item.dataYear && (
+                <p className="text-[10px] text-muted-foreground mt-2">ACS {item.dataYear} data</p>
+              )}
+            </CardContent>
+          </Card>
+        );
+
+        return (
+          <div>
+            <h2 className="text-lg font-heading font-bold text-slate-900 mb-4 flex items-center gap-2">
+              <Globe2 className="w-5 h-5 text-primary" /> Census Comparison
+            </h2>
+            {/* Top row — City · County · State */}
+            <div className="grid sm:grid-cols-3 gap-4">
+              {topCards.map(item => <CensusCard key={`${item.geographyLevel}:${item.geographyValue}`} item={item} />)}
+            </div>
+            {/* Bottom row — SPA breakdown */}
+            {spaItems.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
+                  Service Planning Areas
+                </p>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {spaItems.map(item => <CensusCard key={`${item.geographyLevel}:${item.geographyValue}`} item={item} />)}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Dashboard Charts */}
       {chartsLoading && (

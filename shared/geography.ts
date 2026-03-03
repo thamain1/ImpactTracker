@@ -126,6 +126,17 @@ const CITY_TO_SPA: Record<string, string[]> = {
 const SPA_TO_COUNTY = "Los Angeles County";
 const SPA_COUNTY_STATE = "California";
 
+const SPA_TO_CITY: Record<string, string> = {
+  "SPA 1": "Los Angeles",
+  "SPA 2": "Los Angeles",
+  "SPA 3": "Los Angeles",
+  "SPA 4": "Los Angeles",
+  "SPA 5": "Los Angeles",
+  "SPA 6": "Los Angeles",
+  "SPA 7": "Los Angeles",
+  "SPA 8": "Los Angeles",
+};
+
 export function getParentGeographies(level: string, value: string): GeoHierarchy[] {
   const parents: GeoHierarchy[] = [];
   const normalizedValue = value.trim().toLowerCase();
@@ -152,6 +163,8 @@ export function getParentGeographies(level: string, value: string): GeoHierarchy
     case "SPA": {
       parents.push({ level: "County", value: SPA_TO_COUNTY });
       parents.push({ level: "State", value: SPA_COUNTY_STATE });
+      const spaCity = SPA_TO_CITY[value.trim()];
+      if (spaCity) parents.push({ level: "City", value: spaCity });
       break;
     }
   }
