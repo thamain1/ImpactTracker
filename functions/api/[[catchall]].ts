@@ -57,6 +57,7 @@ const programCreateSchema = z.object({
   budget: z.number().optional().nullable(),
   staffCount: z.number().optional().nullable(),
   monthlyCapacity: z.number().optional().nullable(),
+  zipCode: z.string().optional().nullable(),
   metrics: z.array(z.object({
     name: z.string().min(1),
     unit: z.string().min(1),
@@ -675,11 +676,15 @@ app.get("/api/impact/stats", async (c) => {
       if (ctx.county) addToAggregation("County", ctx.county, metrics);
       if (ctx.state)  addToAggregation("State",  ctx.state,  metrics);
     } else {
-      // No zip — add at recorded level and roll up to parent geographies
+      // No zip — add at recorded level and roll up to County/State only.
+      // Skip SPA rollup: a City entry maps to multiple SPAs which would
+      // double-count participants across SPAs incorrectly.
       addToAggregation(entry.geographyLevel, entry.geographyValue, metrics);
-      getParentGeographies(entry.geographyLevel, entry.geographyValue).forEach(parent => {
-        addToAggregation(parent.level, parent.value, metrics);
-      });
+      getParentGeographies(entry.geographyLevel, entry.geographyValue)
+        .filter(p => p.level !== "SPA")
+        .forEach(parent => {
+          addToAggregation(parent.level, parent.value, metrics);
+        });
     }
   });
 

@@ -36,8 +36,9 @@ export default function ProgramDetails() {
 
   const { user } = useAuth();
   const { data: orgs } = useOrganizations();
-  const orgZip = (orgs?.[0] as any)?.addressZip || undefined;
   const { data: program, isLoading: progLoading } = useProgram(programId);
+  // Program zip takes priority; fall back to org zip
+  const effectiveZip = (program as any)?.zipCode || (orgs?.[0] as any)?.addressZip || undefined;
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: allEntries, isLoading: entriesLoading } = useImpactEntries(programId);
 
@@ -164,8 +165,8 @@ export default function ProgramDetails() {
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
-            <ImportCsvDialog program={program} orgZip={orgZip} />
-            <AddImpactDialog program={program} lastGeographyLevel={allEntries?.[0]?.geographyLevel} orgZip={orgZip} />
+            <ImportCsvDialog program={program} orgZip={effectiveZip} />
+            <AddImpactDialog program={program} lastGeographyLevel={allEntries?.[0]?.geographyLevel} orgZip={effectiveZip} />
           </div>
         </div>
       </div>

@@ -33,6 +33,7 @@ const formSchema = z.object({
   budget: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   staffCount: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   monthlyCapacity: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
+  zipCode: z.string().optional().nullable(),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -69,6 +70,7 @@ export default function ProgramEdit() {
       budget: null,
       staffCount: null,
       monthlyCapacity: null,
+      zipCode: "",
     },
   });
 
@@ -91,6 +93,7 @@ export default function ProgramEdit() {
         budget: (program as any).budget ?? null,
         staffCount: (program as any).staffCount ?? null,
         monthlyCapacity: (program as any).monthlyCapacity ?? null,
+        zipCode: (program as any).zipCode || "",
       });
     }
   }, [program, form]);
@@ -289,20 +292,37 @@ export default function ProgramEdit() {
                     />
                   </div>
 
-                  <FormField
-                    control={form.control}
-                    name="locations"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Service Locations</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g. SPA 6, Downtown LA, County-wide" {...field} value={field.value || ""} data-testid="input-edit-locations" />
-                        </FormControl>
-                        <FormDescription>Separate multiple locations with commas.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="locations"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Service Locations</FormLabel>
+                          <FormControl>
+                            <Input placeholder="e.g. SPA 6, Downtown LA, County-wide" {...field} value={field.value || ""} data-testid="input-edit-locations" />
+                          </FormControl>
+                          <FormDescription>Separate multiple locations with commas.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="zipCode"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Program ZIP Code</FormLabel>
+                          <FormControl>
+                            <Input placeholder="Leave blank to use org ZIP" {...field} value={field.value || ""} maxLength={5} data-testid="input-edit-zip-code" />
+                          </FormControl>
+                          <FormDescription>Overrides the org ZIP for new entries.</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
 
                   <FormField
                     control={form.control}

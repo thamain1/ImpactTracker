@@ -164,11 +164,15 @@ export default function Reports() {
         if (ctx.county) addToAgg("County", ctx.county, mv);
         if (ctx.state)  addToAgg("State",  ctx.state,  mv);
       } else {
-        // No zip — add at recorded level and roll up to parent geographies
+        // No zip — add at recorded level and roll up to County/State only.
+        // Skip SPA rollup: a City entry maps to multiple SPAs which would
+        // double-count participants across SPAs incorrectly.
         addToAgg(entry.geographyLevel, entry.geographyValue, mv);
-        getParentGeographies(entry.geographyLevel, entry.geographyValue).forEach(parent => {
-          addToAgg(parent.level, parent.value, mv);
-        });
+        getParentGeographies(entry.geographyLevel, entry.geographyValue)
+          .filter(p => p.level !== "SPA")
+          .forEach(parent => {
+            addToAgg(parent.level, parent.value, mv);
+          });
       }
     });
     return Object.values(aggregation);

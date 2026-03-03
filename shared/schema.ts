@@ -57,6 +57,7 @@ export const programs = pgTable("programs", {
   budget: integer("budget"),             // Total program budget in whole dollars
   staffCount: integer("staff_count"),    // Number of staff
   monthlyCapacity: integer("monthly_capacity"), // Max participants per month
+  zipCode: text("zip_code"),            // Program-level zip override (falls back to org zip)
   createdAt: timestamp("created_at").defaultNow(),
 });
 
