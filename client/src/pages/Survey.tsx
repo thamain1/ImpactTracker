@@ -12,7 +12,7 @@ interface SurveyData {
   programName: string;
   orgName: string;
   orgMission: string;
-  metrics: { name: string; unit: string }[];
+  programs: { id: number; name: string }[];
 }
 
 type Role = "" | "participant" | "supporter";
@@ -21,7 +21,7 @@ function initialState() {
   return {
     step: 0,
     role: "" as Role,
-    resources: [] as string[],
+    selectedProgramIds: [] as number[],
     email: "",
     sex: "",
     ageRange: "",
@@ -40,7 +40,7 @@ export default function Survey() {
 
   const [step, setStep] = useState(0);
   const [role, setRole] = useState<Role>("");
-  const [resources, setResources] = useState<string[]>([]);
+  const [selectedProgramIds, setSelectedProgramIds] = useState<number[]>([]);
   const [email, setEmail] = useState("");
   const [sex, setSex] = useState("");
   const [ageRange, setAgeRange] = useState("");
@@ -83,7 +83,7 @@ export default function Survey() {
     const s = initialState();
     setStep(s.step);
     setRole(s.role);
-    setResources(s.resources);
+    setSelectedProgramIds(s.selectedProgramIds);
     setEmail(s.email);
     setSex(s.sex);
     setAgeRange(s.ageRange);
@@ -102,7 +102,7 @@ export default function Survey() {
         respondentType: type,
       };
       if (type === "participant") {
-        body.resourceSelected = resources.length > 0 ? resources : null;
+        body.selectedProgramIds = selectedProgramIds.length > 0 ? selectedProgramIds : null;
         body.email = email || null;
         body.sex = sex || null;
         body.ageRange = ageRange || null;
@@ -222,22 +222,22 @@ export default function Survey() {
             </div>
           )}
 
-          {/* Step 1 — Resource selection (participants only) */}
+          {/* Step 1 — Program selection (participants only) */}
           {step === 1 && (
             <div className="space-y-6">
               <div className="space-y-1">
-                <h2 className="text-xl font-semibold text-slate-800">Which resources are you taking advantage of today?</h2>
+                <h2 className="text-xl font-semibold text-slate-800">Which programs are you here for today?</h2>
                 <p className="text-slate-400 text-sm">Select all that apply</p>
               </div>
               <div className="space-y-3">
-                {survey.metrics.length === 0 && (
-                  <p className="text-slate-400 text-sm italic">No resources configured for this program.</p>
+                {survey.programs.length === 0 && (
+                  <p className="text-slate-400 text-sm italic">No active programs found.</p>
                 )}
-                {survey.metrics.map(m => {
-                  const checked = resources.includes(m.name);
+                {survey.programs.map(p => {
+                  const checked = selectedProgramIds.includes(p.id);
                   return (
                     <label
-                      key={m.name}
+                      key={p.id}
                       className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                         checked
                           ? "border-primary bg-primary/5"
@@ -246,17 +246,15 @@ export default function Survey() {
                     >
                       <input
                         type="checkbox"
-                        value={m.name}
                         checked={checked}
                         onChange={() =>
-                          setResources(prev =>
-                            checked ? prev.filter(r => r !== m.name) : [...prev, m.name]
+                          setSelectedProgramIds(prev =>
+                            checked ? prev.filter(id => id !== p.id) : [...prev, p.id]
                           )
                         }
                         className="accent-primary w-4 h-4"
                       />
-                      <span className="text-slate-700 font-medium">{m.name}</span>
-                      <span className="text-slate-400 text-sm ml-auto">{m.unit}</span>
+                      <span className="text-slate-700 font-medium">{p.name}</span>
                     </label>
                   );
                 })}

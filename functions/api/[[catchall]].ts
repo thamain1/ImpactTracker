@@ -706,22 +706,31 @@ app.get("/api/impact/stats", async (c) => {
     }
   });
 
-  // Survey participant counts — each response = 1 for their chosen resource
+  // Survey participant counts — each response row = 1 attendance for this program.
+  // We add to the primary participant-counting metric so it flows into impact totals.
   if (fallbackGeo) {
     const { data: surveyRows } = await supabase
       .from("survey_responses")
-      .select("resource_selected")
+      .select("id")
       .eq("program_id", programId)
       .eq("respondent_type", "participant");
 
-    (surveyRows || []).forEach((row: any) => {
-      if (!row.resource_selected) return;
-      const mv = { [row.resource_selected]: 1 };
-      if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
-      if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
-      if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);
-      if (fallbackGeo!.state)  addToAggregation("State",  fallbackGeo!.state,  mv);
-    });
+    if (surveyRows && surveyRows.length > 0) {
+      const { data: metricsRows } = await supabase
+        .from("impact_metrics").select("name, counts_as_participant").eq("program_id", programId);
+      const participantMetrics = (metricsRows || []).filter((m: any) => m.counts_as_participant !== false);
+      const primaryMetric = participantMetrics[0]?.name || (metricsRows || [])[0]?.name;
+
+      if (primaryMetric) {
+        surveyRows.forEach(() => {
+          const mv = { [primaryMetric]: 1 };
+          if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
+          if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
+          if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);
+          if (fallbackGeo!.state)  addToAggregation("State",  fallbackGeo!.state,  mv);
+        });
+      }
+    }
   }
 
   const stats: unknown[] = [];
@@ -1179,14 +1188,14 @@ app.post("/api/programs/:id/import-csv", async (c) => {
 // ─── Survey (public) ──────────────────────────────────────────────────────────
 
 const surveyResponseSchema = z.object({
-  respondentType:   z.enum(["participant", "supporter"]),
-  // Accept a single string OR an array (participant can select multiple resources)
-  resourceSelected: z.union([z.string(), z.array(z.string())]).optional().nullable(),
-  email:            z.string().email().optional().or(z.literal("")).nullable(),
-  sex:              z.string().optional().nullable(),
-  ageRange:         z.string().optional().nullable(),
-  familySize:       z.number().int().min(1).max(20).optional().nullable(),
-  householdIncome:  z.string().optional().nullable(),
+  respondentType:      z.enum(["participant", "supporter"]),
+  // Participant selects one or more programs they are attending today
+  selectedProgramIds:  z.array(z.number()).optional().nullable(),
+  email:               z.string().email().optional().or(z.literal("")).nullable(),
+  sex:                 z.string().optional().nullable(),
+  ageRange:            z.string().optional().nullable(),
+  familySize:          z.number().int().min(1).max(20).optional().nullable(),
+  householdIncome:     z.string().optional().nullable(),
 });
 
 app.get("/api/survey/:programId", async (c) => {
@@ -1201,15 +1210,17 @@ app.get("/api/survey/:programId", async (c) => {
   const { data: org } = await supabase
     .from("organizations").select("name, mission").eq("id", prog.org_id).maybeSingle();
 
-  const { data: metrics } = await supabase
-    .from("impact_metrics").select("name, unit").eq("program_id", programId);
+  // Return all active programs for the org so participants can select which ones
+  // they are using today — not just the metrics of the launching program.
+  const { data: programs } = await supabase
+    .from("programs").select("id, name").eq("org_id", prog.org_id).in("status", ["active", "draft"]);
 
   return c.json({
     programId,
     programName: prog.name,
     orgName: org?.name ?? "",
     orgMission: org?.mission ?? "",
-    metrics: (metrics || []).map((m: any) => ({ name: m.name, unit: m.unit })),
+    programs: (programs || []).map((p: any) => ({ id: p.id, name: p.name })),
   });
 });
 
@@ -1222,16 +1233,19 @@ app.post("/api/survey/:programId/respond", async (c) => {
     const body = await c.req.json();
     const input = surveyResponseSchema.parse(body);
 
-    // Normalize resourceSelected to an array (may be string, string[], or null)
-    const rawRes = input.resourceSelected;
-    const resourceList: (string | null)[] =
-      Array.isArray(rawRes) && rawRes.length > 0 ? rawRes
-      : typeof rawRes === "string" && rawRes ? [rawRes]
-      : [null];
+    // For participants: insert one row per selected program so each program's
+    // stats pick up a +1 count. Fall back to the launching program if none selected.
+    // For supporters: always log to the launching program.
+    const targetProgramIds: number[] =
+      input.respondentType === "participant" &&
+      Array.isArray(input.selectedProgramIds) &&
+      input.selectedProgramIds.length > 0
+        ? input.selectedProgramIds
+        : [programId];
 
     const base = {
-      program_id: programId,
       respondent_type: input.respondentType,
+      resource_selected: null,
       email: input.email || null,
       sex: input.sex ?? null,
       age_range: input.ageRange ?? null,
@@ -1239,8 +1253,7 @@ app.post("/api/survey/:programId/respond", async (c) => {
       household_income: input.householdIncome ?? null,
     };
 
-    // Insert one row per selected resource so each counts individually in stats
-    const rows = resourceList.map(r => ({ ...base, resource_selected: r }));
+    const rows = targetProgramIds.map(pid => ({ ...base, program_id: pid }));
     const { error } = await supabase.from("survey_responses").insert(rows);
     if (error) throw error;
     return c.json({ success: true }, 201);

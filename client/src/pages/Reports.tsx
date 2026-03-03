@@ -202,17 +202,23 @@ export default function Reports() {
       const yr = new Date(r.createdAt + "").getFullYear();
       return yr === parseInt(selectedYear);
     });
-    filteredSurveys?.forEach((resp: any) => {
-      if (resp.respondentType !== "participant" || !resp.resourceSelected) return;
-      const mv = { [resp.resourceSelected]: 1 };
-      if (orgGeoContext?.spa)    addToAgg("SPA",    orgGeoContext.spa,    mv);
-      if (orgGeoContext?.city)   addToAgg("City",   orgGeoContext.city,   mv);
-      if (orgGeoContext?.county) addToAgg("County", orgGeoContext.county, mv);
-      if (orgGeoContext?.state)  addToAgg("State",  orgGeoContext.state,  mv);
-    });
+    const primaryMetric =
+      selectedProgram?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ||
+      selectedProgram?.metrics[0]?.name;
+
+    if (primaryMetric) {
+      filteredSurveys?.forEach((resp: any) => {
+        if (resp.respondentType !== "participant") return;
+        const mv = { [primaryMetric]: 1 };
+        if (orgGeoContext?.spa)    addToAgg("SPA",    orgGeoContext.spa,    mv);
+        if (orgGeoContext?.city)   addToAgg("City",   orgGeoContext.city,   mv);
+        if (orgGeoContext?.county) addToAgg("County", orgGeoContext.county, mv);
+        if (orgGeoContext?.state)  addToAgg("State",  orgGeoContext.state,  mv);
+      });
+    }
 
     return Object.values(aggregation);
-  }, [stats, entries, selectedYear, orgGeoContext, surveyResponses]);
+  }, [stats, entries, selectedYear, orgGeoContext, surveyResponses, selectedProgram]);
 
   const participantMetricNames = useMemo(() => {
     if (!selectedProgram) return new Set<string>();
