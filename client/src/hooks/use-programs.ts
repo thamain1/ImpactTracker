@@ -57,12 +57,39 @@ export function useCreateProgram() {
   });
 }
 
+export type MetricCreateData = {
+  name: string;
+  unit: string;
+  countsAsParticipant?: boolean;
+  itemType?: string;
+  unitCost?: number | null;
+  inventoryTotal?: number | null;
+  allocationType?: string;
+  allocationBaseQty?: number;
+  allocationThreshold?: number | null;
+  allocationBonusQty?: number | null;
+  customQuestionPrompt?: string | null;
+};
+
+export type MetricUpdateData = {
+  countsAsParticipant?: boolean;
+  itemType?: string;
+  unitCost?: number | null;
+  inventoryTotal?: number | null;
+  inventoryRemaining?: number | null;
+  allocationType?: string;
+  allocationBaseQty?: number;
+  allocationThreshold?: number | null;
+  allocationBonusQty?: number | null;
+  customQuestionPrompt?: string | null;
+};
+
 export function useCreateMetric(programId: number) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (data: { name: string; unit: string; countsAsParticipant?: boolean }) => {
+    mutationFn: async (data: MetricCreateData) => {
       const res = await apiRequest("POST", `/api/programs/${programId}/metrics`, data);
       return res.json();
     },
@@ -82,7 +109,7 @@ export function useUpdateMetric(programId: number) {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async ({ metricId, data }: { metricId: number; data: { countsAsParticipant: boolean } }) => {
+    mutationFn: async ({ metricId, data }: { metricId: number; data: MetricUpdateData }) => {
       const res = await apiRequest("PATCH", `/api/programs/${programId}/metrics/${metricId}`, data);
       return res.json();
     },

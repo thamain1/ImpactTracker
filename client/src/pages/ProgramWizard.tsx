@@ -9,6 +9,7 @@ import { useOrganizations } from "@/hooks/use-organizations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -75,12 +76,23 @@ export default function ProgramWizard() {
 
   const addMetric = () => {
     const current = form.getValues("metrics");
-    form.setValue("metrics", [...current, { name: "", unit: "", countsAsParticipant: true }]);
+    form.setValue("metrics", [...current, {
+      name: "", unit: "", countsAsParticipant: true,
+      itemType: "service", allocationType: "fixed", allocationBaseQty: 1,
+      unitCost: null, inventoryTotal: null,
+      allocationThreshold: null, allocationBonusQty: null, customQuestionPrompt: null,
+    }]);
   };
 
   const removeMetric = (index: number) => {
     const current = form.getValues("metrics");
     form.setValue("metrics", current.filter((_, i) => i !== index));
+  };
+
+  const updateMetricField = (index: number, key: string, value: unknown) => {
+    const current = form.getValues("metrics");
+    const updated = current.map((m, i) => i === index ? { ...m, [key]: value } : m);
+    form.setValue("metrics", updated as typeof current);
   };
 
   const nextStep = () => {
@@ -509,6 +521,108 @@ export default function ProgramWizard() {
                           </FormItem>
                         )}
                       />
+
+                      {/* Item Type */}
+                      <div className="ml-1">
+                        <Label className="text-xs">Item Type</Label>
+                        <Select
+                          value={(metrics[index] as any).itemType ?? "service"}
+                          onValueChange={v => updateMetricField(index, "itemType", v)}
+                        >
+                          <SelectTrigger className="h-8 text-xs mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="service">Service</SelectItem>
+                            <SelectItem value="physical_item">Physical Item</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                      </div>
+
+                      {/* Physical item fields */}
+                      {(metrics[index] as any).itemType === "physical_item" && (
+                        <div className="ml-1 space-y-3 border-l-2 border-primary/20 pl-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">Unit Cost ($)</Label>
+                              <Input
+                                type="number" min="0" step="0.01" placeholder="0.00"
+                                className="h-8 text-xs mt-1"
+                                value={(metrics[index] as any).unitCost ?? ""}
+                                onChange={e => updateMetricField(index, "unitCost", parseFloat(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Average market value per unit (e.g. $15.00 per backpack). Used to calculate how many units your program budget can cover.</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Starting Inventory</Label>
+                              <Input
+                                type="number" min="0" placeholder="e.g. 500"
+                                className="h-8 text-xs mt-1"
+                                value={(metrics[index] as any).inventoryTotal ?? ""}
+                                onChange={e => updateMetricField(index, "inventoryTotal", parseInt(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Total stock on hand right now (e.g. 500 backpacks). Automatically decrements with each survey check-in.</p>
+                            </div>
+                          </div>
+
+                          <div>
+                            <Label className="text-xs">Allocation Rule</Label>
+                            <Select
+                              value={(metrics[index] as any).allocationType ?? "fixed"}
+                              onValueChange={v => updateMetricField(index, "allocationType", v)}
+                            >
+                              <SelectTrigger className="h-8 text-xs mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="fixed">Fixed (always 1)</SelectItem>
+                                <SelectItem value="family_size_scaled">Family Size Threshold</SelectItem>
+                                <SelectItem value="custom_question">Custom Question</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground mt-0.5">Fixed: every check-in receives 1 unit (e.g. one meal per visit). Family Size: base qty for all + bonus if household exceeds a threshold. Custom Question: ask the participant a number at check-in (e.g. "How many children?").</p>
+                          </div>
+
+                          {(metrics[index] as any).allocationType === "family_size_scaled" && (
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <Label className="text-xs">Family Size Threshold</Label>
+                                <Input
+                                  type="number" min="1" placeholder="e.g. 5"
+                                  className="h-8 text-xs mt-1"
+                                  value={(metrics[index] as any).allocationThreshold ?? ""}
+                                  onChange={e => updateMetricField(index, "allocationThreshold", parseInt(e.target.value) || null)}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Bonus units are added when a household's size exceeds this number.</p>
+                              </div>
+                              <div>
+                                <Label className="text-xs">Bonus Qty</Label>
+                                <Input
+                                  type="number" min="1" placeholder="e.g. 1"
+                                  className="h-8 text-xs mt-1"
+                                  value={(metrics[index] as any).allocationBonusQty ?? ""}
+                                  onChange={e => updateMetricField(index, "allocationBonusQty", parseInt(e.target.value) || null)}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Extra units delivered above the threshold. Example: threshold 4, bonus 1 → a family of 5 receives 2 units.</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {(metrics[index] as any).allocationType === "custom_question" && (
+                            <div>
+                              <Label className="text-xs">Question to Ask Participant</Label>
+                              <Input
+                                placeholder="e.g. How many school-age children need backpacks?"
+                                className="h-8 text-xs mt-1"
+                                value={(metrics[index] as any).customQuestionPrompt ?? ""}
+                                onChange={e => updateMetricField(index, "customQuestionPrompt", e.target.value || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">This question appears on the kiosk survey. The participant's numeric answer determines how many units they receive.</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
 

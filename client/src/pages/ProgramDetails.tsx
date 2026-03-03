@@ -21,10 +21,13 @@ import {
   AreaChart
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart, Truck, Users, DollarSign, Activity, ClipboardList } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart, Truck, Users, DollarSign, Activity, ClipboardList, QrCode } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Progress } from "@/components/ui/progress";
+import QRCode from "react-qr-code";
 import { api } from "@shared/routes";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
@@ -79,38 +82,57 @@ export default function ProgramDetails() {
 
   const primaryMetric = program?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || program?.metrics[0]?.name;
 
+  // Year-filtered survey responses (mirrors the year filter applied to entries)
+  const yearFilteredSurveys = useMemo(() => {
+    if (!surveyResponses) return [];
+    if (selectedYear === "all") return surveyResponses;
+    const yr = parseInt(selectedYear);
+    return surveyResponses.filter((r: any) => new Date(r.createdAt + 'Z').getFullYear() === yr);
+  }, [surveyResponses, selectedYear]);
+
   const participantsByMonth = useMemo(() => {
-    if (!entries || participantMetricNames.size === 0) return [];
+    if (participantMetricNames.size === 0) return [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
-    entries.forEach(entry => {
+    // Manual impact entries
+    (entries || []).forEach(entry => {
       const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
+    // Survey responses — each check-in counts as 1 participant regardless of quantity delivered
+    yearFilteredSurveys.forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      const month = new Date(r.createdAt + 'Z').getMonth();
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, participantMetricNames]);
+  }, [entries, participantMetricNames, yearFilteredSurveys]);
 
-  // Year-filtered survey responses (mirrors the year filter applied to entries)
-  const yearFilteredSurveys = useMemo(() => {
-    if (!surveyResponses) return [];
-    if (selectedYear === "all") return surveyResponses;
-    const yr = parseInt(selectedYear);
-    return surveyResponses.filter((r: any) => new Date(r.createdAt).getFullYear() === yr);
-  }, [surveyResponses, selectedYear]);
-
-  // Group survey responses by date for the Recent Entries table
+  // Group survey responses by date for the Recent Entries table — sum actual quantity delivered
   const surveyEntriesByDate = useMemo(() => {
     const groups: Record<string, number> = {};
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
-      const date = new Date(r.createdAt).toISOString().split("T")[0];
-      groups[date] = (groups[date] || 0) + 1;
+      const date = new Date(r.createdAt + 'Z').toISOString().split("T")[0];
+      groups[date] = (groups[date] || 0) + (r.quantityDelivered ?? 1);
     });
     return groups;
   }, [yearFilteredSurveys]);
+
+  // Total participants served: 1 per kiosk check-in + manual entry participant metric values
+  const totalParticipants = useMemo(() => {
+    const surveyCount = yearFilteredSurveys.filter((r: any) => r.respondentType === "participant").length;
+    const manualCount = (entries || []).reduce((sum, entry) => {
+      const mv = entry.metricValues as Record<string, number>;
+      let total = 0;
+      participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
+      return sum + total;
+    }, 0);
+    return surveyCount + manualCount;
+  }, [yearFilteredSurveys, entries, participantMetricNames]);
 
   if (progLoading || statsLoading) {
     return (
@@ -140,11 +162,22 @@ export default function ProgramDetails() {
     });
   });
 
-  // Add survey participant counts to the primary metric
+  // Add survey quantities to matching metric KPI cards
+  // Route by metricId when present (new allocations), fall back to primary metric for legacy rows
   const primaryMetricName = program.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ?? program.metrics[0]?.name;
+  program.metrics.forEach((m: any) => {
+    const metricSurveyQty = yearFilteredSurveys
+      .filter((r: any) => r.respondentType === "participant" && r.metricId === m.id)
+      .reduce((sum: number, r: any) => sum + (r.quantityDelivered ?? 1), 0);
+    if (totalMetrics[m.name] !== undefined) {
+      totalMetrics[m.name] += metricSurveyQty;
+    }
+  });
+  // Legacy rows with no metricId: add 1 per response to the primary metric
+  const unlinkedCount = yearFilteredSurveys
+    .filter((r: any) => r.respondentType === "participant" && !r.metricId).length;
   if (primaryMetricName && totalMetrics[primaryMetricName] !== undefined) {
-    const surveyCount = yearFilteredSurveys.filter((r: any) => r.respondentType === "participant").length;
-    totalMetrics[primaryMetricName] += surveyCount;
+    totalMetrics[primaryMetricName] += unlinkedCount;
   }
 
   return (
@@ -182,6 +215,35 @@ export default function ProgramDetails() {
               <ClipboardList className="w-4 h-4 mr-2" />
               Launch Survey
             </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline">
+                  <QrCode className="w-4 h-4 mr-2" />
+                  Survey QR
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-4 text-center" align="end">
+                <div id="survey-qr-printable">
+                  <QRCode value={`${window.location.origin}/survey/${programId}`} size={180} />
+                  <p className="text-xs mt-2 text-muted-foreground break-all">
+                    {window.location.origin}/survey/{programId}
+                  </p>
+                  <p className="font-medium text-sm mt-1">{program.name}</p>
+                </div>
+                <Button
+                  variant="outline" size="sm" className="mt-3 w-full"
+                  onClick={() => {
+                    const el = document.getElementById("survey-qr-printable");
+                    const w = window.open("", "_blank");
+                    w?.document.write(`<html><body style="text-align:center;font-family:sans-serif;padding:40px">${el?.innerHTML ?? ""}</body></html>`);
+                    w?.document.close();
+                    w?.print();
+                  }}
+                >
+                  Print QR Code
+                </Button>
+              </PopoverContent>
+            </Popover>
             <Link href={`/programs/${programId}/edit`}>
               <Button variant="outline" data-testid="button-edit-program">
                 <Pencil className="w-4 h-4 mr-2" />
@@ -214,6 +276,24 @@ export default function ProgramDetails() {
 
       {/* KPI Cards */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Participants Served — always first, counts 1 per kiosk check-in */}
+        <Card className="border-slate-200 shadow-sm overflow-hidden relative">
+          <div className="absolute top-0 right-0 p-3 opacity-10">
+            <Users className="w-16 h-16 text-primary" />
+          </div>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-slate-500 uppercase tracking-wider">
+              Participants Served
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold font-heading text-slate-900">
+              {totalParticipants.toLocaleString()}
+            </div>
+            <div className="text-sm text-slate-400 mt-1 font-medium">People served</div>
+          </CardContent>
+        </Card>
+
         {program.metrics.map((metric, i) => {
           let metricGoal: string | null = null;
           if (i === 0 && program.goals) {
@@ -242,6 +322,49 @@ export default function ProgramDetails() {
           );
         })}
       </div>
+
+      {/* Inventory Status */}
+      {program.metrics.filter((m: any) => m.itemType === "physical_item" && m.inventoryTotal != null).length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Inventory Status</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {program.metrics.filter((m: any) => m.itemType === "physical_item").map((m: any) => {
+              const remaining = m.inventoryRemaining ?? m.inventoryTotal ?? 0;
+              const total = m.inventoryTotal ?? 0;
+              const pct = total > 0 ? Math.round((remaining / total) * 100) : null;
+              return (
+                <Card key={m.id} className="p-4">
+                  <p className="text-sm font-medium">{m.name}</p>
+                  <p className="text-2xl font-bold mt-1">{remaining.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">of {total.toLocaleString()} remaining</p>
+                  {pct != null && <Progress value={pct} className="mt-2 h-1.5" />}
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Budget Capacity */}
+      {(program as any).budget && program.metrics.some((m: any) => m.unitCost && m.unitCost > 0) && (
+        <div>
+          <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0).map((m: any) => {
+              const maxUnits = Math.floor((program as any).budget / m.unitCost);
+              return (
+                <Card key={m.id} className="p-4">
+                  <p className="text-sm font-medium">{m.name}</p>
+                  <p className="text-2xl font-bold mt-1">{maxUnits.toLocaleString()}</p>
+                  <p className="text-xs text-muted-foreground">
+                    max units at ${m.unitCost}/unit from ${((program as any).budget as number).toLocaleString()} budget
+                  </p>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Chart Section */}
@@ -424,7 +547,7 @@ export default function ProgramDetails() {
                 <div>
                   <div className="text-sm opacity-80 mb-1">Last Updated</div>
                   <div className="font-bold text-xl" data-testid="text-last-updated">
-                    {entries?.[0] ? format(new Date(entries[0].createdAt!), 'MMM d, yyyy') : 'Never'}
+                    {entries?.[0] ? format(new Date(entries[0].createdAt! + 'Z'), 'MMM d, yyyy') : 'Never'}
                   </div>
                 </div>
                 <div>
@@ -551,7 +674,7 @@ export default function ProgramDetails() {
                   {surveyResponses.map((r: any) => (
                     <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                       <td className="py-2.5 pl-2 text-slate-500 text-xs whitespace-nowrap">
-                        {format(new Date(r.createdAt), "MMM d, yyyy h:mm a")}
+                        {format(new Date(r.createdAt + 'Z'), "MMM d, yyyy h:mm a")}
                       </td>
                       <td className="py-2.5">
                         <Badge

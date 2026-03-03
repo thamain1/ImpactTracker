@@ -7,6 +7,7 @@ import { useProgram, useUpdateProgram, useCreateMetric, useDeleteMetric, useUpda
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
@@ -50,6 +51,13 @@ export default function ProgramEdit() {
   const [newMetricName, setNewMetricName] = useState("");
   const [newMetricUnit, setNewMetricUnit] = useState("");
   const [newMetricCountsAsParticipant, setNewMetricCountsAsParticipant] = useState(true);
+  const [newMetricItemType, setNewMetricItemType] = useState("service");
+  const [newMetricUnitCost, setNewMetricUnitCost] = useState<number | null>(null);
+  const [newMetricInventoryTotal, setNewMetricInventoryTotal] = useState<number | null>(null);
+  const [newMetricAllocationType, setNewMetricAllocationType] = useState("fixed");
+  const [newMetricAllocationThreshold, setNewMetricAllocationThreshold] = useState<number | null>(null);
+  const [newMetricAllocationBonusQty, setNewMetricAllocationBonusQty] = useState<number | null>(null);
+  const [newMetricCustomQuestionPrompt, setNewMetricCustomQuestionPrompt] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -107,8 +115,26 @@ export default function ProgramEdit() {
   const handleAddMetric = () => {
     if (!newMetricName.trim() || !newMetricUnit.trim()) return;
     createMetric.mutate(
-      { name: newMetricName.trim(), unit: newMetricUnit.trim(), countsAsParticipant: newMetricCountsAsParticipant },
-      { onSuccess: () => { setNewMetricName(""); setNewMetricUnit(""); setNewMetricCountsAsParticipant(true); } }
+      {
+        name: newMetricName.trim(),
+        unit: newMetricUnit.trim(),
+        countsAsParticipant: newMetricCountsAsParticipant,
+        itemType: newMetricItemType,
+        unitCost: newMetricUnitCost,
+        inventoryTotal: newMetricInventoryTotal,
+        allocationType: newMetricAllocationType,
+        allocationThreshold: newMetricAllocationThreshold,
+        allocationBonusQty: newMetricAllocationBonusQty,
+        customQuestionPrompt: newMetricCustomQuestionPrompt,
+      },
+      {
+        onSuccess: () => {
+          setNewMetricName(""); setNewMetricUnit(""); setNewMetricCountsAsParticipant(true);
+          setNewMetricItemType("service"); setNewMetricUnitCost(null); setNewMetricInventoryTotal(null);
+          setNewMetricAllocationType("fixed"); setNewMetricAllocationThreshold(null);
+          setNewMetricAllocationBonusQty(null); setNewMetricCustomQuestionPrompt(null);
+        }
+      }
     );
   };
 
@@ -607,6 +633,104 @@ export default function ProgramEdit() {
                             Counts as participant (people served)
                           </span>
                         </label>
+
+                        {/* Item Type */}
+                        <div className="ml-1">
+                          <label className="text-xs text-muted-foreground">Item Type</label>
+                          <Select
+                            value={(m as any).itemType ?? "service"}
+                            onValueChange={v => updateMetric.mutate({ metricId: m.id, data: { itemType: v } })}
+                          >
+                            <SelectTrigger className="h-8 text-xs mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="service">Service</SelectItem>
+                              <SelectItem value="physical_item">Physical Item</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                        </div>
+
+                        {(m as any).itemType === "physical_item" && (
+                          <div className="ml-1 space-y-2 border-l-2 border-primary/20 pl-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-xs text-muted-foreground">Unit Cost ($)</label>
+                                <Input
+                                  type="number" min="0" step="0.01" placeholder="0.00"
+                                  className="h-8 text-xs mt-1"
+                                  defaultValue={(m as any).unitCost ?? ""}
+                                  onBlur={e => updateMetric.mutate({ metricId: m.id, data: { unitCost: parseFloat(e.target.value) || null } })}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Average market value per unit (e.g. $15.00 per backpack). Used to calculate how many units your program budget can cover.</p>
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground">Inventory</label>
+                                <Input
+                                  type="number" min="0" placeholder="e.g. 500"
+                                  className="h-8 text-xs mt-1"
+                                  defaultValue={(m as any).inventoryTotal ?? ""}
+                                  onBlur={e => updateMetric.mutate({ metricId: m.id, data: { inventoryTotal: parseInt(e.target.value) || null } })}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Total stock on hand right now (e.g. 500 backpacks). Automatically decrements with each survey check-in.</p>
+                              </div>
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted-foreground">Allocation Rule</label>
+                              <Select
+                                value={(m as any).allocationType ?? "fixed"}
+                                onValueChange={v => updateMetric.mutate({ metricId: m.id, data: { allocationType: v } })}
+                              >
+                                <SelectTrigger className="h-8 text-xs mt-1">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="fixed">Fixed (always 1)</SelectItem>
+                                  <SelectItem value="family_size_scaled">Family Size Threshold</SelectItem>
+                                  <SelectItem value="custom_question">Custom Question</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <p className="text-xs text-muted-foreground mt-0.5">Fixed: every check-in receives 1 unit (e.g. one meal per visit). Family Size: base qty for all + bonus if household exceeds a threshold. Custom Question: ask the participant a number at check-in (e.g. "How many children?").</p>
+                            </div>
+                            {(m as any).allocationType === "family_size_scaled" && (
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Family Size Threshold</label>
+                                  <Input
+                                    type="number" min="1" placeholder="e.g. 5"
+                                    className="h-8 text-xs mt-1"
+                                    defaultValue={(m as any).allocationThreshold ?? ""}
+                                    onBlur={e => updateMetric.mutate({ metricId: m.id, data: { allocationThreshold: parseInt(e.target.value) || null } })}
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-0.5">Bonus units are added when a household's size exceeds this number.</p>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-muted-foreground">Bonus Qty</label>
+                                  <Input
+                                    type="number" min="1" placeholder="e.g. 1"
+                                    className="h-8 text-xs mt-1"
+                                    defaultValue={(m as any).allocationBonusQty ?? ""}
+                                    onBlur={e => updateMetric.mutate({ metricId: m.id, data: { allocationBonusQty: parseInt(e.target.value) || null } })}
+                                  />
+                                  <p className="text-xs text-muted-foreground mt-0.5">Extra units delivered above the threshold. Example: threshold 4, bonus 1 → a family of 5 receives 2 units.</p>
+                                </div>
+                              </div>
+                            )}
+                            {(m as any).allocationType === "custom_question" && (
+                              <div>
+                                <label className="text-xs text-muted-foreground">Question to Ask Participant</label>
+                                <Input
+                                  placeholder="e.g. How many school-age children need backpacks?"
+                                  className="h-8 text-xs mt-1"
+                                  defaultValue={(m as any).customQuestionPrompt ?? ""}
+                                  onBlur={e => updateMetric.mutate({ metricId: m.id, data: { customQuestionPrompt: e.target.value || null } })}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">This question appears on the kiosk survey. The participant's numeric answer determines how many units they receive.</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                     {program.metrics.length === 0 && (
@@ -662,6 +786,98 @@ export default function ProgramEdit() {
                         Counts as participant (people served)
                       </span>
                     </label>
+
+                    {/* Item Type for new metric */}
+                    <div className="mt-2">
+                      <label className="text-xs text-muted-foreground">Item Type</label>
+                      <Select value={newMetricItemType} onValueChange={setNewMetricItemType}>
+                        <SelectTrigger className="h-8 text-xs mt-1">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="service">Service</SelectItem>
+                          <SelectItem value="physical_item">Physical Item</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                    </div>
+
+                    {newMetricItemType === "physical_item" && (
+                      <div className="mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Unit Cost ($)</Label>
+                            <Input
+                              type="number" min="0" step="0.01" placeholder="0.00"
+                              className="h-8 text-xs mt-1"
+                              value={newMetricUnitCost ?? ""}
+                              onChange={e => setNewMetricUnitCost(parseFloat(e.target.value) || null)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">Average market value per unit (e.g. $15.00 per backpack). Used to calculate how many units your program budget can cover.</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Starting Inventory</Label>
+                            <Input
+                              type="number" min="0" placeholder="e.g. 500"
+                              className="h-8 text-xs mt-1"
+                              value={newMetricInventoryTotal ?? ""}
+                              onChange={e => setNewMetricInventoryTotal(parseInt(e.target.value) || null)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">Total stock on hand right now (e.g. 500 backpacks). Automatically decrements with each survey check-in.</p>
+                          </div>
+                        </div>
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Allocation Rule</Label>
+                          <Select value={newMetricAllocationType} onValueChange={setNewMetricAllocationType}>
+                            <SelectTrigger className="h-8 text-xs mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fixed">Fixed (always 1)</SelectItem>
+                              <SelectItem value="family_size_scaled">Family Size Threshold</SelectItem>
+                              <SelectItem value="custom_question">Custom Question</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-muted-foreground mt-0.5">Fixed: every check-in receives 1 unit (e.g. one meal per visit). Family Size: base qty for all + bonus if household exceeds a threshold. Custom Question: ask the participant a number at check-in (e.g. "How many children?").</p>
+                        </div>
+                        {newMetricAllocationType === "family_size_scaled" && (
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Family Size Threshold</Label>
+                              <Input
+                                type="number" min="1" placeholder="e.g. 5"
+                                className="h-8 text-xs mt-1"
+                                value={newMetricAllocationThreshold ?? ""}
+                                onChange={e => setNewMetricAllocationThreshold(parseInt(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Bonus units are added when a household's size exceeds this number.</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs text-muted-foreground">Bonus Qty Above Threshold</Label>
+                              <Input
+                                type="number" min="1" placeholder="e.g. 1"
+                                className="h-8 text-xs mt-1"
+                                value={newMetricAllocationBonusQty ?? ""}
+                                onChange={e => setNewMetricAllocationBonusQty(parseInt(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Extra units delivered above the threshold. Example: threshold 4, bonus 1 → a family of 5 receives 2 units.</p>
+                            </div>
+                          </div>
+                        )}
+                        {newMetricAllocationType === "custom_question" && (
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Question to Ask Participant</Label>
+                            <Input
+                              placeholder="e.g. How many school-age children need backpacks?"
+                              className="h-8 text-xs mt-1"
+                              value={newMetricCustomQuestionPrompt ?? ""}
+                              onChange={e => setNewMetricCustomQuestionPrompt(e.target.value || null)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">This question appears on the kiosk survey. The participant's numeric answer determines how many units they receive.</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

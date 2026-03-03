@@ -7,7 +7,7 @@ import { z } from "zod";
 import { makeSupabase, toCamel, toSnake, type Env } from "../_lib/supabase";
 import { resolveZipCode } from "../_lib/zipLookup";
 import { getCensusForGeographies, getCensusComparison, getCensusAgeGroups } from "../_lib/census";
-import { generateNarrative } from "../_lib/gemini";
+import { generateNarrative, programBuilderChat, type OrgContext } from "../_lib/gemini";
 import { getParentGeographies } from "../../shared/geography";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,6 +62,14 @@ const programCreateSchema = z.object({
     name: z.string().min(1),
     unit: z.string().min(1),
     countsAsParticipant: z.boolean().optional().default(true),
+    itemType: z.string().optional().default("service"),
+    unitCost: z.number().optional().nullable(),
+    inventoryTotal: z.number().int().optional().nullable(),
+    allocationType: z.string().optional().default("fixed"),
+    allocationBaseQty: z.number().int().optional().default(1),
+    allocationThreshold: z.number().int().optional().nullable(),
+    allocationBonusQty: z.number().int().optional().nullable(),
+    customQuestionPrompt: z.string().optional().nullable(),
   })).optional().default([]),
 });
 const programUpdateSchema = programCreateSchema.omit({ metrics: true }).partial();
@@ -70,8 +78,27 @@ const metricCreateSchema = z.object({
   name: z.string().min(1),
   unit: z.string().min(1),
   countsAsParticipant: z.boolean().optional().default(true),
+  itemType: z.string().optional().default("service"),
+  unitCost: z.number().optional().nullable(),
+  inventoryTotal: z.number().int().optional().nullable(),
+  allocationType: z.string().optional().default("fixed"),
+  allocationBaseQty: z.number().int().optional().default(1),
+  allocationThreshold: z.number().int().optional().nullable(),
+  allocationBonusQty: z.number().int().optional().nullable(),
+  customQuestionPrompt: z.string().optional().nullable(),
 });
-const metricUpdateSchema = z.object({ countsAsParticipant: z.boolean() });
+const metricUpdateSchema = z.object({
+  countsAsParticipant: z.boolean().optional(),
+  itemType: z.string().optional(),
+  unitCost: z.number().optional().nullable(),
+  inventoryTotal: z.number().int().optional().nullable(),
+  inventoryRemaining: z.number().int().optional().nullable(),
+  allocationType: z.string().optional(),
+  allocationBaseQty: z.number().int().optional(),
+  allocationThreshold: z.number().int().optional().nullable(),
+  allocationBonusQty: z.number().int().optional().nullable(),
+  customQuestionPrompt: z.string().optional().nullable(),
+});
 
 const impactCreateSchema = z.object({
   programId: z.number(),
@@ -408,8 +435,19 @@ app.post("/api/programs", async (c) => {
       .from("programs").insert(toSnake(programData)).select().single();
     if (error) throw error;
     const metricsInsert = (metrics || []).map((m: any) => ({
-      program_id: prog.id, name: m.name, unit: m.unit,
+      program_id: prog.id,
+      name: m.name,
+      unit: m.unit,
       counts_as_participant: m.countsAsParticipant ?? true,
+      item_type: m.itemType ?? "service",
+      unit_cost: m.unitCost ?? null,
+      inventory_total: m.inventoryTotal ?? null,
+      inventory_remaining: m.inventoryTotal ?? null,
+      allocation_type: m.allocationType ?? "fixed",
+      allocation_base_qty: m.allocationBaseQty ?? 1,
+      allocation_threshold: m.allocationThreshold ?? null,
+      allocation_bonus_qty: m.allocationBonusQty ?? null,
+      custom_question_prompt: m.customQuestionPrompt ?? null,
     }));
     let createdMetrics: any[] = [];
     if (metricsInsert.length > 0) {
@@ -474,7 +512,21 @@ app.post("/api/programs/:programId/metrics", async (c) => {
     const input = metricCreateSchema.parse(body);
     const { data: metric } = await supabase
       .from("impact_metrics")
-      .insert({ program_id: programId, name: input.name, unit: input.unit, counts_as_participant: input.countsAsParticipant ?? true })
+      .insert({
+        program_id: programId,
+        name: input.name,
+        unit: input.unit,
+        counts_as_participant: input.countsAsParticipant ?? true,
+        item_type: input.itemType ?? "service",
+        unit_cost: input.unitCost ?? null,
+        inventory_total: input.inventoryTotal ?? null,
+        inventory_remaining: input.inventoryTotal ?? null,
+        allocation_type: input.allocationType ?? "fixed",
+        allocation_base_qty: input.allocationBaseQty ?? 1,
+        allocation_threshold: input.allocationThreshold ?? null,
+        allocation_bonus_qty: input.allocationBonusQty ?? null,
+        custom_question_prompt: input.customQuestionPrompt ?? null,
+      })
       .select().single();
     return c.json(toCamel(metric), 201);
   } catch (err) {
@@ -495,9 +547,21 @@ app.patch("/api/programs/:programId/metrics/:id", async (c) => {
     const { data: existing } = await supabase
       .from("impact_metrics").select("id").eq("id", metricId).eq("program_id", programId).maybeSingle();
     if (!existing) return c.json({ message: "Metric not found in this program" }, 404);
+    const metricUpdateData: Record<string, unknown> = {};
+    if (input.countsAsParticipant !== undefined) metricUpdateData.counts_as_participant = input.countsAsParticipant;
+    if (input.itemType !== undefined)             metricUpdateData.item_type = input.itemType;
+    if (input.unitCost !== undefined)             metricUpdateData.unit_cost = input.unitCost;
+    if (input.inventoryTotal !== undefined)       metricUpdateData.inventory_total = input.inventoryTotal;
+    if (input.inventoryRemaining !== undefined)   metricUpdateData.inventory_remaining = input.inventoryRemaining;
+    if (input.allocationType !== undefined)       metricUpdateData.allocation_type = input.allocationType;
+    if (input.allocationBaseQty !== undefined)    metricUpdateData.allocation_base_qty = input.allocationBaseQty;
+    if (input.allocationThreshold !== undefined)  metricUpdateData.allocation_threshold = input.allocationThreshold;
+    if (input.allocationBonusQty !== undefined)   metricUpdateData.allocation_bonus_qty = input.allocationBonusQty;
+    if (input.customQuestionPrompt !== undefined) metricUpdateData.custom_question_prompt = input.customQuestionPrompt;
+
     const { data: updated } = await supabase
       .from("impact_metrics")
-      .update({ counts_as_participant: input.countsAsParticipant })
+      .update(metricUpdateData)
       .eq("id", metricId).select().single();
     return c.json(toCamel(updated));
   } catch (err) {
@@ -706,12 +770,12 @@ app.get("/api/impact/stats", async (c) => {
     }
   });
 
-  // Survey participant counts — each response row = 1 attendance for this program.
-  // We add to the primary participant-counting metric so it flows into impact totals.
+  // Survey participant counts — each response row contributes quantity_delivered (default 1).
+  // We add to the matching metric (via metric_id) or the primary participant metric.
   if (fallbackGeo) {
     const { data: surveyRows } = await supabase
       .from("survey_responses")
-      .select("id")
+      .select("metric_id, quantity_delivered, impact_metrics(name)")
       .eq("program_id", programId)
       .eq("respondent_type", "participant");
 
@@ -721,15 +785,16 @@ app.get("/api/impact/stats", async (c) => {
       const participantMetrics = (metricsRows || []).filter((m: any) => m.counts_as_participant !== false);
       const primaryMetric = participantMetrics[0]?.name || (metricsRows || [])[0]?.name;
 
-      if (primaryMetric) {
-        surveyRows.forEach(() => {
-          const mv = { [primaryMetric]: 1 };
-          if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
-          if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
-          if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);
-          if (fallbackGeo!.state)  addToAggregation("State",  fallbackGeo!.state,  mv);
-        });
-      }
+      surveyRows.forEach((row: any) => {
+        const metricName = (row.impact_metrics as any)?.name ?? primaryMetric;
+        if (!metricName) return;
+        const qty = row.quantity_delivered ?? 1;
+        const mv = { [metricName]: qty };
+        if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
+        if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
+        if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);
+        if (fallbackGeo!.state)  addToAggregation("State",  fallbackGeo!.state,  mv);
+      });
     }
   }
 
@@ -1196,6 +1261,11 @@ const surveyResponseSchema = z.object({
   ageRange:            z.string().optional().nullable(),
   familySize:          z.number().int().min(1).max(20).optional().nullable(),
   householdIncome:     z.string().optional().nullable(),
+  allocations: z.array(z.object({
+    programId: z.number().int(),
+    metricId:  z.number().int(),
+    qty:       z.number().int().min(0),
+  })).optional().default([]),
 });
 
 app.get("/api/survey/:programId", async (c) => {
@@ -1212,15 +1282,40 @@ app.get("/api/survey/:programId", async (c) => {
 
   // Return all active programs for the org so participants can select which ones
   // they are using today — not just the metrics of the launching program.
-  const { data: programs } = await supabase
+  const { data: orgProgs } = await supabase
     .from("programs").select("id, name").eq("org_id", prog.org_id).in("status", ["active", "draft"]);
+
+  const progIds = (orgProgs || []).map((p: any) => p.id);
+  const { data: allMetrics } = progIds.length > 0
+    ? await supabase
+        .from("impact_metrics")
+        .select("id, program_id, name, unit, item_type, allocation_type, allocation_base_qty, allocation_threshold, allocation_bonus_qty, custom_question_prompt, inventory_remaining")
+        .in("program_id", progIds)
+    : { data: [] };
 
   return c.json({
     programId,
     programName: prog.name,
     orgName: org?.name ?? "",
     orgMission: org?.mission ?? "",
-    programs: (programs || []).map((p: any) => ({ id: p.id, name: p.name })),
+    programs: (orgProgs || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      metrics: (allMetrics || [])
+        .filter((m: any) => m.program_id === p.id)
+        .map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          unit: m.unit,
+          itemType: m.item_type,
+          allocationType: m.allocation_type,
+          allocationBaseQty: m.allocation_base_qty ?? 1,
+          allocationThreshold: m.allocation_threshold ?? null,
+          allocationBonusQty: m.allocation_bonus_qty ?? null,
+          customQuestionPrompt: m.custom_question_prompt ?? null,
+          inventoryRemaining: m.inventory_remaining ?? null,
+        })),
+    })),
   });
 });
 
@@ -1233,16 +1328,6 @@ app.post("/api/survey/:programId/respond", async (c) => {
     const body = await c.req.json();
     const input = surveyResponseSchema.parse(body);
 
-    // For participants: insert one row per selected program so each program's
-    // stats pick up a +1 count. Fall back to the launching program if none selected.
-    // For supporters: always log to the launching program.
-    const targetProgramIds: number[] =
-      input.respondentType === "participant" &&
-      Array.isArray(input.selectedProgramIds) &&
-      input.selectedProgramIds.length > 0
-        ? input.selectedProgramIds
-        : [programId];
-
     const base = {
       respondent_type: input.respondentType,
       resource_selected: null,
@@ -1253,9 +1338,49 @@ app.post("/api/survey/:programId/respond", async (c) => {
       household_income: input.householdIncome ?? null,
     };
 
-    const rows = targetProgramIds.map(pid => ({ ...base, program_id: pid }));
-    const { error } = await supabase.from("survey_responses").insert(rows);
-    if (error) throw error;
+    if (input.respondentType === "supporter") {
+      // Supporters: log to the launching program only
+      const { error } = await supabase.from("survey_responses").insert({ ...base, program_id: programId });
+      if (error) throw error;
+    } else {
+      // Participants: if allocations provided, insert one row per allocation with metric_id + quantity_delivered
+      const allocations = input.allocations ?? [];
+      if (allocations.length > 0) {
+        const rows = allocations.map((a: any) => ({
+          ...base,
+          program_id: a.programId,
+          metric_id: a.metricId,
+          quantity_delivered: a.qty,
+        }));
+        const { error } = await supabase.from("survey_responses").insert(rows);
+        if (error) throw error;
+
+        // Deduct inventory for each physical-item metric allocation
+        for (const a of allocations.filter((a: any) => a.qty > 0)) {
+          const { data: m } = await supabase
+            .from("impact_metrics")
+            .select("inventory_remaining, item_type")
+            .eq("id", a.metricId)
+            .maybeSingle();
+          if (m?.item_type === "physical_item" && m?.inventory_remaining != null) {
+            await supabase
+              .from("impact_metrics")
+              .update({ inventory_remaining: Math.max(0, (m.inventory_remaining ?? 0) - a.qty) })
+              .eq("id", a.metricId);
+          }
+        }
+      } else {
+        // No allocations — fall back to one row per selected program
+        const targetProgramIds: number[] =
+          Array.isArray(input.selectedProgramIds) && input.selectedProgramIds.length > 0
+            ? input.selectedProgramIds
+            : [programId];
+        const rows = targetProgramIds.map((pid: number) => ({ ...base, program_id: pid }));
+        const { error } = await supabase.from("survey_responses").insert(rows);
+        if (error) throw error;
+      }
+    }
+
     return c.json({ success: true }, 201);
   } catch (err) {
     if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
@@ -1333,6 +1458,49 @@ app.delete("/api/survey-responses/:id", async (c) => {
 
   await supabase.from("survey_responses").delete().eq("id", id);
   return c.body(null, 204);
+});
+
+// ─── Program Builder Chat ─────────────────────────────────────────────────────
+
+app.post("/api/program-builder/chat", async (c) => {
+  try {
+    const apiKey = c.env.GEMINI_API_KEY;
+    if (!apiKey) return c.json({ message: "Gemini API key not configured" }, 400);
+
+    const supabase = makeSupabase(c.env);
+    const user = c.get("user");
+
+    const body = await c.req.json();
+    const input = z.object({
+      messages: z.array(z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })),
+      orgId: z.number(),
+    }).parse(body);
+
+    if (!(await userOwnsOrg(supabase, user.id, input.orgId)))
+      return c.json({ message: "Not authorized" }, 403);
+
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name, mission")
+      .eq("id", input.orgId)
+      .maybeSingle();
+
+    const orgContext: OrgContext = {
+      orgId:      input.orgId,
+      orgName:    org?.name    ?? "Your Organization",
+      orgMission: org?.mission ?? null,
+    };
+
+    const result = await programBuilderChat(apiKey, input.messages, orgContext);
+    return c.json(result);
+  } catch (err) {
+    if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return c.json({ message: msg }, 500);
+  }
 });
 
 // ─── Error handler ────────────────────────────────────────────────────────────

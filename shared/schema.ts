@@ -67,6 +67,15 @@ export const impactMetrics = pgTable("impact_metrics", {
   name: text("name").notNull(),
   unit: text("unit").notNull(),
   countsAsParticipant: boolean("counts_as_participant").notNull().default(true),
+  itemType:             text("item_type").notNull().default("service"),
+  unitCost:             doublePrecision("unit_cost"),
+  inventoryTotal:       integer("inventory_total"),
+  inventoryRemaining:   integer("inventory_remaining"),
+  allocationType:       text("allocation_type").notNull().default("fixed"),
+  allocationBaseQty:    integer("allocation_base_qty").notNull().default(1),
+  allocationThreshold:  integer("allocation_threshold"),
+  allocationBonusQty:   integer("allocation_bonus_qty"),
+  customQuestionPrompt: text("custom_question_prompt"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -126,6 +135,8 @@ export const surveyResponses = pgTable("survey_responses", {
   ageRange:         text("age_range"),
   familySize:       integer("family_size"),
   householdIncome:  text("household_income"),
+  metricId:         integer("metric_id").references(() => impactMetrics.id),
+  quantityDelivered: integer("quantity_delivered").default(1),
   createdAt:        timestamp("created_at").defaultNow(),
 });
 
@@ -226,5 +237,17 @@ export interface ImpactReportData {
 }
 
 export type CreateProgramRequest = InsertProgram & {
-  metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
+  metrics: {
+    name: string;
+    unit: string;
+    countsAsParticipant?: boolean;
+    itemType?: string;
+    unitCost?: number | null;
+    inventoryTotal?: number | null;
+    allocationType?: string;
+    allocationBaseQty?: number;
+    allocationThreshold?: number | null;
+    allocationBonusQty?: number | null;
+    customQuestionPrompt?: string | null;
+  }[];
 };

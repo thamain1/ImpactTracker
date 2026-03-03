@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Link, useLocation } from "wouter";
-import { ArrowRight, Plus, FolderOpen, Trash2, Search, LayoutGrid, List, Pencil } from "lucide-react";
+import { ArrowRight, Plus, FolderOpen, Trash2, Search, LayoutGrid, List, Pencil, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -97,6 +97,9 @@ export default function Programs() {
           <p className="text-muted-foreground mt-1">Manage your initiatives and track their success.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button variant="outline" onClick={() => navigate("/programs/ai-builder")} data-testid="button-ai-builder">
+            <Sparkles className="w-4 h-4 mr-2" /> Build with AI
+          </Button>
           <Button onClick={() => navigate("/programs/new")} data-testid="button-new-program">
             <Plus className="w-4 h-4 mr-2" /> New Program
           </Button>

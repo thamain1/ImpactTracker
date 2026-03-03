@@ -140,7 +140,19 @@ export const api = {
       method: 'POST' as const,
       path: '/api/programs' as const,
       input: insertProgramSchema.extend({
-        metrics: z.array(z.object({ name: z.string(), unit: z.string(), countsAsParticipant: z.boolean().optional().default(true) })),
+        metrics: z.array(z.object({
+          name: z.string(),
+          unit: z.string(),
+          countsAsParticipant: z.boolean().optional().default(true),
+          itemType: z.string().optional().default("service"),
+          unitCost: z.number().optional().nullable(),
+          inventoryTotal: z.number().int().optional().nullable(),
+          allocationType: z.string().optional().default("fixed"),
+          allocationBaseQty: z.number().int().optional().default(1),
+          allocationThreshold: z.number().int().optional().nullable(),
+          allocationBonusQty: z.number().int().optional().nullable(),
+          customQuestionPrompt: z.string().optional().nullable(),
+        })),
       }),
       responses: {
         201: z.custom<typeof programs.$inferSelect & { metrics: typeof impactMetrics.$inferSelect[] }>(),
@@ -177,7 +189,19 @@ export const api = {
     create: {
       method: 'POST' as const,
       path: '/api/programs/:programId/metrics' as const,
-      input: z.object({ name: z.string().min(1), unit: z.string().min(1), countsAsParticipant: z.boolean().optional().default(true) }),
+      input: z.object({
+        name: z.string().min(1),
+        unit: z.string().min(1),
+        countsAsParticipant: z.boolean().optional().default(true),
+        itemType: z.string().optional().default("service"),
+        unitCost: z.number().optional().nullable(),
+        inventoryTotal: z.number().int().optional().nullable(),
+        allocationType: z.string().optional().default("fixed"),
+        allocationBaseQty: z.number().int().optional().default(1),
+        allocationThreshold: z.number().int().optional().nullable(),
+        allocationBonusQty: z.number().int().optional().nullable(),
+        customQuestionPrompt: z.string().optional().nullable(),
+      }),
       responses: {
         201: z.custom<typeof impactMetrics.$inferSelect>(),
         400: errorSchemas.validation,
@@ -186,7 +210,18 @@ export const api = {
     update: {
       method: 'PATCH' as const,
       path: '/api/programs/:programId/metrics/:id' as const,
-      input: z.object({ countsAsParticipant: z.boolean() }),
+      input: z.object({
+        countsAsParticipant: z.boolean().optional(),
+        itemType: z.string().optional(),
+        unitCost: z.number().optional().nullable(),
+        inventoryTotal: z.number().int().optional().nullable(),
+        inventoryRemaining: z.number().int().optional().nullable(),
+        allocationType: z.string().optional(),
+        allocationBaseQty: z.number().int().optional(),
+        allocationThreshold: z.number().int().optional().nullable(),
+        allocationBonusQty: z.number().int().optional().nullable(),
+        customQuestionPrompt: z.string().optional().nullable(),
+      }),
       responses: {
         200: z.custom<typeof impactMetrics.$inferSelect>(),
         400: errorSchemas.validation,
@@ -431,6 +466,21 @@ export const api = {
       responses: {
         204: z.void(),
         404: errorSchemas.notFound,
+      },
+    },
+  },
+  programBuilder: {
+    chat: {
+      method: "POST" as const,
+      path: "/api/program-builder/chat" as const,
+      input: z.object({
+        messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
+        orgId: z.number(),
+      }),
+      responses: {
+        200: z.unknown(),
+        400: errorSchemas.validation,
+        403: errorSchemas.unauthorized,
       },
     },
   },

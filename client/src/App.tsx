@@ -13,6 +13,7 @@ import Dashboard from "@/pages/Dashboard";
 import Programs from "@/pages/Programs";
 import ProgramDetails from "@/pages/ProgramDetails";
 import ProgramWizard from "@/pages/ProgramWizard";
+import ProgramBuilderChat from "@/pages/ProgramBuilderChat";
 import ProgramEdit from "@/pages/ProgramEdit";
 import Reports from "@/pages/Reports";
 import AdminDashboard from "@/pages/AdminDashboard";
@@ -77,6 +78,10 @@ function Router() {
 
       <Route path="/programs/new">
         <ProtectedRoute component={ProgramWizard} />
+      </Route>
+
+      <Route path="/programs/ai-builder">
+        <ProtectedRoute component={ProgramBuilderChat} />
       </Route>
 
       <Route path="/programs/:id/edit">

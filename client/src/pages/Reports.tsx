@@ -199,7 +199,7 @@ export default function Reports() {
     // Only add survey counts in the year-filtered path; the server already
     // includes them when selectedYear === "all" (via /api/impact/stats).
     const filteredSurveys = surveyResponses?.filter((r: any) => {
-      const yr = new Date(r.createdAt + "").getFullYear();
+      const yr = new Date(r.createdAt + 'Z').getFullYear();
       return yr === parseInt(selectedYear);
     });
     const primaryMetric =

@@ -5,17 +5,75 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, ChevronLeft, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { CheckCircle, ChevronLeft, Loader2, Package } from "lucide-react";
+
+interface SurveyMetric {
+  id: number;
+  name: string;
+  unit: string;
+  itemType: string;
+  allocationType: string;
+  allocationBaseQty: number;
+  allocationThreshold?: number | null;
+  allocationBonusQty?: number | null;
+  customQuestionPrompt?: string | null;
+  inventoryRemaining?: number | null;
+}
+
+interface SurveyProgram {
+  id: number;
+  name: string;
+  metrics: SurveyMetric[];
+}
 
 interface SurveyData {
   programId: number;
   programName: string;
   orgName: string;
   orgMission: string;
-  programs: { id: number; name: string }[];
+  programs: SurveyProgram[];
+}
+
+interface Allocation {
+  programId: number;
+  metricId: number;
+  metricName: string;
+  unit: string;
+  qty: number;
 }
 
 type Role = "" | "participant" | "supporter";
+
+function calcAllocations(
+  programs: SurveyProgram[],
+  selectedProgramIds: number[],
+  familySize: number | null,
+  customAnswers: Record<number, number>
+): Allocation[] {
+  const result: Allocation[] = [];
+  for (const prog of programs.filter(p => selectedProgramIds.includes(p.id))) {
+    for (const metric of prog.metrics) {
+      let qty = metric.allocationBaseQty;
+      if (metric.allocationType === "family_size_scaled"
+          && familySize != null
+          && metric.allocationThreshold != null
+          && familySize > metric.allocationThreshold) {
+        qty += metric.allocationBonusQty ?? 0;
+      } else if (metric.allocationType === "custom_question") {
+        qty = customAnswers[prog.id] ?? 0;
+      }
+      result.push({
+        programId: prog.id,
+        metricId: metric.id,
+        metricName: metric.name,
+        unit: metric.unit,
+        qty,
+      });
+    }
+  }
+  return result;
+}
 
 function initialState() {
   return {
@@ -50,6 +108,12 @@ export default function Survey() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Allocation-related state
+  const [customAnswers, setCustomAnswers] = useState<Record<number, number>>({});
+  const [modalProgram, setModalProgram] = useState<SurveyProgram | null>(null);
+  const [modalAnswer, setModalAnswer] = useState("");
+  const [allocations, setAllocations] = useState<Allocation[]>([]);
+
   // Fetch survey data on mount
   useEffect(() => {
     if (!programId) return;
@@ -62,9 +126,9 @@ export default function Survey() {
       .catch(e => setLoadError(e.message));
   }, [programId]);
 
-  // Auto-reset countdown when on thank-you step
+  // Auto-reset countdown when on thank-you step (step 5)
   useEffect(() => {
-    if (step !== 4) return;
+    if (step !== 5) return;
     setCountdown(5);
     const interval = setInterval(() => {
       setCountdown(c => {
@@ -91,6 +155,35 @@ export default function Survey() {
     setHouseholdIncome(s.householdIncome);
     setCountdown(s.countdown);
     setSubmitError(null);
+    setCustomAnswers({});
+    setAllocations([]);
+  }
+
+  function handleProgramCheck(prog: SurveyProgram, checked: boolean) {
+    if (checked) {
+      setSelectedProgramIds(prev => [...prev, prog.id]);
+      // If this program has a custom_question metric, open the modal
+      const hasCustomQ = prog.metrics.some(m => m.allocationType === "custom_question");
+      if (hasCustomQ) {
+        setModalProgram(prog);
+        setModalAnswer("");
+      }
+    } else {
+      setSelectedProgramIds(prev => prev.filter(id => id !== prog.id));
+      setCustomAnswers(prev => {
+        const next = { ...prev };
+        delete next[prog.id];
+        return next;
+      });
+    }
+  }
+
+  function confirmCustomAnswer() {
+    if (!modalProgram) return;
+    const num = parseInt(modalAnswer) || 0;
+    setCustomAnswers(prev => ({ ...prev, [modalProgram.id]: num }));
+    setModalProgram(null);
+    setModalAnswer("");
   }
 
   async function submitResponse(type: Role) {
@@ -102,12 +195,16 @@ export default function Survey() {
         respondentType: type,
       };
       if (type === "participant") {
-        body.selectedProgramIds = selectedProgramIds.length > 0 ? selectedProgramIds : null;
         body.email = email || null;
         body.sex = sex || null;
         body.ageRange = ageRange || null;
         body.familySize = familySize ? parseInt(familySize) : null;
         body.householdIncome = householdIncome || null;
+        body.allocations = allocations.map(a => ({
+          programId: a.programId,
+          metricId: a.metricId,
+          qty: a.qty,
+        }));
       }
       const res = await fetch(`/api/survey/${programId}/respond`, {
         method: "POST",
@@ -118,7 +215,7 @@ export default function Survey() {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as any).message || `Submit failed (${res.status})`);
       }
-      setStep(4);
+      setStep(5);
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "Submission failed");
     } finally {
@@ -139,6 +236,14 @@ export default function Survey() {
     } else if (step === 2) {
       setStep(3);
     } else if (step === 3) {
+      // Compute allocations, then advance to preview step
+      if (survey) {
+        const fs = familySize ? parseInt(familySize) : null;
+        const computed = calcAllocations(survey.programs, selectedProgramIds, fs, customAnswers);
+        setAllocations(computed);
+      }
+      setStep(4);
+    } else if (step === 4) {
       await submitResponse("participant");
     }
   }
@@ -167,6 +272,34 @@ export default function Survey() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 flex flex-col">
+      {/* Custom question modal */}
+      {modalProgram && (
+        <Dialog open={!!modalProgram} onOpenChange={(open) => { if (!open) setModalProgram(null); }}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>{modalProgram.name}</DialogTitle>
+            </DialogHeader>
+            {modalProgram.metrics
+              .filter(m => m.allocationType === "custom_question" && m.customQuestionPrompt)
+              .map(m => (
+                <div key={m.id} className="space-y-2">
+                  <Label>{m.customQuestionPrompt}</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="0"
+                    value={modalAnswer}
+                    onChange={e => setModalAnswer(e.target.value)}
+                  />
+                </div>
+              ))}
+            <DialogFooter>
+              <Button onClick={confirmCustomAnswer}>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Org branding header */}
       <header className="bg-white border-b border-slate-200 px-6 py-6 text-center shadow-sm">
         <div className="max-w-lg mx-auto space-y-1">
@@ -247,11 +380,7 @@ export default function Survey() {
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() =>
-                          setSelectedProgramIds(prev =>
-                            checked ? prev.filter(id => id !== p.id) : [...prev, p.id]
-                          )
-                        }
+                        onChange={() => handleProgramCheck(p, !checked)}
                         className="accent-primary w-4 h-4"
                       />
                       <span className="text-slate-700 font-medium">{p.name}</span>
@@ -374,6 +503,58 @@ export default function Survey() {
                 <Button variant="outline" className="flex-1" onClick={() => setStep(2)}>
                   <ChevronLeft className="w-4 h-4 mr-1" /> Back
                 </Button>
+                <Button className="flex-1" onClick={handleContinue}>
+                  Continue
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4 — Allocation Preview */}
+          {step === 4 && (
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold text-slate-800">Here&apos;s what you&apos;ll receive today:</h2>
+                <p className="text-slate-400 text-sm">Please confirm before submitting.</p>
+              </div>
+
+              {allocations.length === 0 ? (
+                <p className="text-slate-400 text-sm italic">No items to display.</p>
+              ) : (
+                <div className="space-y-4">
+                  {(() => {
+                    const byProgram: Record<number, { name: string; items: Allocation[] }> = {};
+                    allocations.forEach(a => {
+                      if (!byProgram[a.programId]) {
+                        const prog = survey.programs.find(p => p.id === a.programId);
+                        byProgram[a.programId] = { name: prog?.name ?? "Program", items: [] };
+                      }
+                      byProgram[a.programId].items.push(a);
+                    });
+                    return Object.entries(byProgram).map(([pid, group]) => (
+                      <div key={pid} className="rounded-lg border border-slate-200 p-4">
+                        <p className="text-sm font-semibold text-slate-700 mb-2">{group.name}</p>
+                        <ul className="space-y-1">
+                          {group.items.map(a => (
+                            <li key={a.metricId} className="flex items-center gap-2 text-sm text-slate-600">
+                              <Package className="w-3.5 h-3.5 text-primary shrink-0" />
+                              <span className="font-medium text-slate-800">{a.metricName}</span>
+                              <span className="text-slate-400">×</span>
+                              <span className="font-bold text-primary">{a.qty}</span>
+                              <span className="text-slate-400 text-xs">{a.unit}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1" onClick={() => setStep(3)}>
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Back
+                </Button>
                 <Button className="flex-1" disabled={submitting} onClick={handleContinue}>
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Submit
@@ -382,8 +563,8 @@ export default function Survey() {
             </div>
           )}
 
-          {/* Step 4 — Thank you */}
-          {step === 4 && (
+          {/* Step 5 — Thank you */}
+          {step === 5 && (
             <div className="text-center space-y-5 py-4">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto" />
               <div className="space-y-1">
