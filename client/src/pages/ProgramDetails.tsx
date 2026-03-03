@@ -80,6 +80,15 @@ export default function ProgramDetails() {
     return program.metrics.length > 0 ? new Set([program.metrics[0].name]) : new Set<string>();
   }, [program]);
 
+  // IDs of metrics that count as participants — used to filter survey rows so multi-metric
+  // programs don't inflate the check-in count (one check-in creates one row per metric).
+  const participantMetricIds = useMemo(() => {
+    if (!program) return new Set<number>();
+    const participant = program.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.id as number));
+    return program.metrics.length > 0 ? new Set([program.metrics[0].id as number]) : new Set<number>();
+  }, [program]);
+
   const primaryMetric = program?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || program?.metrics[0]?.name;
 
   // Year-filtered survey responses (mirrors the year filter applied to entries)
@@ -102,29 +111,39 @@ export default function ProgramDetails() {
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
-    // Survey responses — each check-in counts as 1 participant regardless of quantity delivered
+    // Survey responses — each check-in counts as 1 participant regardless of quantity delivered.
+    // Only count the countsAsParticipant metric row (metricId in participantMetricIds) to avoid
+    // inflating the count when a single check-in creates multiple rows (one per metric).
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       const month = new Date(r.createdAt + 'Z').getMonth();
       monthCounts[month] = (monthCounts[month] || 0) + 1;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, participantMetricNames, yearFilteredSurveys]);
+  }, [entries, participantMetricNames, participantMetricIds, yearFilteredSurveys]);
 
-  // Group survey responses by date for the Recent Entries table — sum actual quantity delivered
+  // Group survey responses by date for the Recent Entries table — sum quantity for participant
+  // metrics only so multi-metric programs don't show inflated counts.
   const surveyEntriesByDate = useMemo(() => {
     const groups: Record<string, number> = {};
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       const date = new Date(r.createdAt + 'Z').toISOString().split("T")[0];
       groups[date] = (groups[date] || 0) + (r.quantityDelivered ?? 1);
     });
     return groups;
-  }, [yearFilteredSurveys]);
+  }, [yearFilteredSurveys, participantMetricIds]);
 
-  // Total participants served: 1 per kiosk check-in + manual entry participant metric values
+  // Total participants served: 1 per kiosk check-in + manual entry participant metric values.
+  // Count only rows for countsAsParticipant metrics to avoid double-counting when a single
+  // check-in creates multiple survey_responses rows (one per metric allocation).
   const totalParticipants = useMemo(() => {
-    const surveyCount = yearFilteredSurveys.filter((r: any) => r.respondentType === "participant").length;
+    const surveyCount = yearFilteredSurveys.filter((r: any) =>
+      r.respondentType === "participant" &&
+      (r.metricId == null || participantMetricIds.has(r.metricId))
+    ).length;
     const manualCount = (entries || []).reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
@@ -132,7 +151,7 @@ export default function ProgramDetails() {
       return sum + total;
     }, 0);
     return surveyCount + manualCount;
-  }, [yearFilteredSurveys, entries, participantMetricNames]);
+  }, [yearFilteredSurveys, entries, participantMetricNames, participantMetricIds]);
 
   if (progLoading || statsLoading) {
     return (
