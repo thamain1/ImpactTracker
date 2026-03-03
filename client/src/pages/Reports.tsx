@@ -196,9 +196,10 @@ export default function Reports() {
 
   // Normalised list for census lookups:
   // - CDPs collapsed to their major city
-  // - Every entry is expanded to include its parent geographies (County, State,
-  //   SPAs, etc.) via getParentGeographies — so City-only programs get County,
-  //   State, and SPA census data automatically without needing zip codes.
+  // - Every entry expanded to its parent geographies for census fetching
+  // - SPA is only added when it already exists in geoList (zip-resolved entries).
+  //   We do NOT expand City→SPA because that would create SPA census cards with
+  //   0 participants — SPAs must come from actual zip-resolved SPA stats.
   const censusGeoList = useMemo(() => {
     const unique = new Map<string, { level: string; value: string }>();
     const addGeo = (level: string, value: string) => {
@@ -209,9 +210,11 @@ export default function Reports() {
         ? (CITY_CANONICAL_MAP[g.value.toLowerCase()] ?? g.value)
         : g.value;
       addGeo(g.level, canonical);
-      // Expand to parents — gives County+State for City entries, SPA+City for
-      // SPA entries, etc. One level of expansion is enough (no recursion needed).
-      getParentGeographies(g.level, canonical).forEach(p => addGeo(p.level, p.value));
+      // Expand to parents but skip SPA when the source is not already SPA-level.
+      // City→SPA expansion would fetch SPA census data but show 0 participants.
+      getParentGeographies(g.level, canonical)
+        .filter(p => !(p.level === "SPA" && g.level !== "SPA"))
+        .forEach(p => addGeo(p.level, p.value));
     });
     return Array.from(unique.values());
   }, [geoList]);
