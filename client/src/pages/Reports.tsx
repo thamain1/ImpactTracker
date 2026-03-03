@@ -159,6 +159,20 @@ export default function Reports() {
     });
   }, [allEntries, selectedYear]);
 
+  const participantMetricNames = useMemo(() => {
+    if (!selectedProgram) return new Set<string>();
+    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.name));
+    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].name]) : new Set<string>();
+  }, [selectedProgram]);
+
+  const participantMetricIds = useMemo(() => {
+    if (!selectedProgram) return new Set<number>();
+    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.id as number));
+    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].id as number]) : new Set<number>();
+  }, [selectedProgram]);
+
   const filteredStats = useMemo(() => {
     if (selectedYear === "all") return stats;
     if (!entries || entries.length === 0) return [];
@@ -220,20 +234,6 @@ export default function Reports() {
 
     return Object.values(aggregation);
   }, [stats, entries, selectedYear, orgGeoContext, surveyResponses, selectedProgram, participantMetricIds]);
-
-  const participantMetricNames = useMemo(() => {
-    if (!selectedProgram) return new Set<string>();
-    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
-    if (participant.length > 0) return new Set(participant.map((m: any) => m.name));
-    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].name]) : new Set<string>();
-  }, [selectedProgram]);
-
-  const participantMetricIds = useMemo(() => {
-    if (!selectedProgram) return new Set<number>();
-    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
-    if (participant.length > 0) return new Set(participant.map((m: any) => m.id as number));
-    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].id as number]) : new Set<number>();
-  }, [selectedProgram]);
 
   const primaryMetric = selectedProgram?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || selectedProgram?.metrics[0]?.name || "";
 
