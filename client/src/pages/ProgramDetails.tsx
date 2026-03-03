@@ -1,6 +1,7 @@
 import { useRoute } from "wouter";
 import { useProgram } from "@/hooks/use-programs";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
+import { useSurveyResponses } from "@/hooks/use-survey";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
 import { EditImpactDialog } from "@/components/EditImpactDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
@@ -41,6 +42,8 @@ export default function ProgramDetails() {
   const effectiveZip = (program as any)?.zipCode || (orgs?.[0] as any)?.addressZip || undefined;
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: allEntries, isLoading: entriesLoading } = useImpactEntries(programId);
+  // Poll every 10 s so the KPI cards and entries update in real time as survey responses come in
+  const { data: surveyResponses } = useSurveyResponses(programId, { refetchInterval: 10000 });
 
   const availableYears = useMemo(() => {
     if (!allEntries) return [];
@@ -85,6 +88,25 @@ export default function ProgramDetails() {
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
   }, [entries, participantMetricNames]);
 
+  // Year-filtered survey responses (mirrors the year filter applied to entries)
+  const yearFilteredSurveys = useMemo(() => {
+    if (!surveyResponses) return [];
+    if (selectedYear === "all") return surveyResponses;
+    const yr = parseInt(selectedYear);
+    return surveyResponses.filter((r: any) => new Date(r.createdAt).getFullYear() === yr);
+  }, [surveyResponses, selectedYear]);
+
+  // Group survey responses by date for the Recent Entries table
+  const surveyEntriesByDate = useMemo(() => {
+    const groups: Record<string, number> = {};
+    yearFilteredSurveys.forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      const date = new Date(r.createdAt).toISOString().split("T")[0];
+      groups[date] = (groups[date] || 0) + 1;
+    });
+    return groups;
+  }, [yearFilteredSurveys]);
+
   if (progLoading || statsLoading) {
     return (
       <div className="p-8 max-w-7xl mx-auto space-y-8">
@@ -112,6 +134,13 @@ export default function ProgramDetails() {
       }
     });
   });
+
+  // Add survey participant counts to the primary metric
+  const primaryMetricName = program.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ?? program.metrics[0]?.name;
+  if (primaryMetricName && totalMetrics[primaryMetricName] !== undefined) {
+    const surveyCount = yearFilteredSurveys.filter((r: any) => r.respondentType === "participant").length;
+    totalMetrics[primaryMetricName] += surveyCount;
+  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
@@ -259,70 +288,119 @@ export default function ProgramDetails() {
                     </tr>
                   </thead>
                   <tbody>
-                    {entries?.slice(0, 5).map((entry) => (
-                      <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
-                        <td className="py-3 pl-2 text-slate-600">
-                          {format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="bg-slate-50 font-normal text-xs text-slate-500 border-slate-200">
-                              {entry.geographyLevel}
-                            </Badge>
-                            <span className="font-medium text-slate-700">{entry.geographyValue}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex flex-col items-end gap-1">
-                            {(() => {
-                              const mv = entry.metricValues as Record<string, number>;
-                              const sorted = Object.entries(mv).sort(([a], [b]) => {
-                                const aIsParticipant = participantMetricNames.has(a);
-                                const bIsParticipant = participantMetricNames.has(b);
-                                if (aIsParticipant && !bIsParticipant) return -1;
-                                if (!aIsParticipant && bIsParticipant) return 1;
-                                return 0;
-                              });
-                              const participantTotal = sorted
-                                .filter(([k]) => participantMetricNames.has(k))
-                                .reduce((sum, [, v]) => sum + Number(v || 0), 0);
-                              const hasMultipleParticipantMetrics = sorted.filter(([k]) => participantMetricNames.has(k)).length > 1;
-                              return (
-                                <>
-                                  {hasMultipleParticipantMetrics && participantTotal > 0 && (
-                                    <span className="text-xs font-semibold text-primary">
-                                      <span className="font-bold">{participantTotal.toLocaleString()}</span> Total Participants
-                                    </span>
-                                  )}
-                                  {sorted.map(([key, val]) => (
-                                    <span key={key} className="text-xs text-slate-600">
-                                      <span className="font-bold text-slate-900">{Number(val || 0).toLocaleString()}</span> {key}
-                                    </span>
-                                  ))}
-                                </>
-                              );
-                            })()}
-                          </div>
-                        </td>
-                        <td className="py-3 pr-2 text-right">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => setEditingEntry(entry)}
-                            data-testid={`button-edit-entry-${entry.id}`}
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!entries?.length && (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-slate-400">
-                          No recent entries found
-                        </td>
-                      </tr>
-                    )}
+                    {(() => {
+                      // Merge real entries with survey date-groups, sort by date desc, show top 5
+                      type RealRow = { kind: "entry"; entry: typeof entries extends (infer T)[] | undefined ? T : never };
+                      type SurveyRow = { kind: "survey"; date: string; count: number };
+                      type Row = RealRow | SurveyRow;
+
+                      const rows: Row[] = [
+                        ...(entries || []).map(e => ({ kind: "entry" as const, entry: e })),
+                        ...Object.entries(surveyEntriesByDate).map(([date, count]) => ({
+                          kind: "survey" as const, date, count,
+                        })),
+                      ];
+                      rows.sort((a, b) => {
+                        const da = a.kind === "entry" ? a.entry.date : a.date;
+                        const db = b.kind === "entry" ? b.entry.date : b.date;
+                        return db.localeCompare(da);
+                      });
+                      const visible = rows.slice(0, 5);
+
+                      if (visible.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4} className="py-8 text-center text-slate-400">
+                              No recent entries found
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return visible.map((row, idx) => {
+                        if (row.kind === "survey") {
+                          return (
+                            <tr key={`survey-${row.date}`} className="border-b border-slate-50 last:border-0 bg-teal-50/40">
+                              <td className="py-3 pl-2 text-slate-600">
+                                {format(new Date(row.date + "T00:00:00"), "MMM d, yyyy")}
+                              </td>
+                              <td className="py-3">
+                                <div className="flex items-center gap-2">
+                                  <Badge className="bg-teal-100 text-teal-700 border-teal-200 font-normal text-xs">
+                                    Survey
+                                  </Badge>
+                                  <span className="font-medium text-slate-700">Kiosk Check-in</span>
+                                </div>
+                              </td>
+                              <td className="py-3 text-right">
+                                <span className="text-xs text-slate-600">
+                                  <span className="font-bold text-slate-900">{row.count.toLocaleString()}</span> {primaryMetricName || "Participants"}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-2" />
+                            </tr>
+                          );
+                        }
+                        const entry = row.entry;
+                        return (
+                          <tr key={entry.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                            <td className="py-3 pl-2 text-slate-600">
+                              {format(new Date(entry.date + "T00:00:00"), "MMM d, yyyy")}
+                            </td>
+                            <td className="py-3">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="bg-slate-50 font-normal text-xs text-slate-500 border-slate-200">
+                                  {entry.geographyLevel}
+                                </Badge>
+                                <span className="font-medium text-slate-700">{entry.geographyValue}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                {(() => {
+                                  const mv = entry.metricValues as Record<string, number>;
+                                  const sorted = Object.entries(mv).sort(([a], [b]) => {
+                                    const aIsParticipant = participantMetricNames.has(a);
+                                    const bIsParticipant = participantMetricNames.has(b);
+                                    if (aIsParticipant && !bIsParticipant) return -1;
+                                    if (!aIsParticipant && bIsParticipant) return 1;
+                                    return 0;
+                                  });
+                                  const participantTotal = sorted
+                                    .filter(([k]) => participantMetricNames.has(k))
+                                    .reduce((sum, [, v]) => sum + Number(v || 0), 0);
+                                  const hasMultipleParticipantMetrics = sorted.filter(([k]) => participantMetricNames.has(k)).length > 1;
+                                  return (
+                                    <>
+                                      {hasMultipleParticipantMetrics && participantTotal > 0 && (
+                                        <span className="text-xs font-semibold text-primary">
+                                          <span className="font-bold">{participantTotal.toLocaleString()}</span> Total Participants
+                                        </span>
+                                      )}
+                                      {sorted.map(([key, val]) => (
+                                        <span key={key} className="text-xs text-slate-600">
+                                          <span className="font-bold text-slate-900">{Number(val || 0).toLocaleString()}</span> {key}
+                                        </span>
+                                      ))}
+                                    </>
+                                  );
+                                })()}
+                              </div>
+                            </td>
+                            <td className="py-3 pr-2 text-right">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setEditingEntry(entry)}
+                                data-testid={`button-edit-entry-${entry.id}`}
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>

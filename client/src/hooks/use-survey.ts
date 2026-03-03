@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 
-export function useSurveyResponses(programId: number) {
+export function useSurveyResponses(programId: number, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ["/api/survey-responses", programId],
     queryFn: async () => {
@@ -9,5 +9,6 @@ export function useSurveyResponses(programId: number) {
       return res.json();
     },
     enabled: !!programId && !isNaN(programId),
+    ...options,
   });
 }
