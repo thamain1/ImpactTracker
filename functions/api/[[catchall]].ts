@@ -657,6 +657,19 @@ app.get("/api/impact/stats", async (c) => {
     .from("impact_entries").select("*").eq("program_id", programId);
   const entries = (entryRows || []).map((e: any) => toCamel(e));
 
+  // Resolve the effective zip (program zip > org zip) for assigning entries
+  // without geoContext to the correct single SPA.
+  let fallbackSpa: string | null = null;
+  const { data: progRow } = await supabase.from("programs").select("zip_code, org_id").eq("id", programId).maybeSingle();
+  if (progRow) {
+    const { data: orgRow } = await supabase.from("organizations").select("address_zip").eq("id", progRow.org_id).maybeSingle();
+    const effectiveZip = (progRow.zip_code || orgRow?.address_zip || "").replace(/\D/g, "");
+    if (effectiveZip.length === 5) {
+      const resolved = await resolveZipCode(effectiveZip);
+      fallbackSpa = (resolved as any)?.spa ?? null;
+    }
+  }
+
   const aggregation: Record<string, Record<string, Record<string, number>>> = {};
   function addToAggregation(level: string, value: string, metrics: Record<string, number>) {
     if (!value) return;
@@ -676,15 +689,15 @@ app.get("/api/impact/stats", async (c) => {
       if (ctx.county) addToAggregation("County", ctx.county, metrics);
       if (ctx.state)  addToAggregation("State",  ctx.state,  metrics);
     } else {
-      // No zip — add at recorded level and roll up to County/State only.
-      // Skip SPA rollup: a City entry maps to multiple SPAs which would
-      // double-count participants across SPAs incorrectly.
+      // No zip — roll up to County/State only (skip multi-SPA guessing).
       addToAggregation(entry.geographyLevel, entry.geographyValue, metrics);
       getParentGeographies(entry.geographyLevel, entry.geographyValue)
         .filter(p => p.level !== "SPA")
-        .forEach(parent => {
-          addToAggregation(parent.level, parent.value, metrics);
-        });
+        .forEach(parent => { addToAggregation(parent.level, parent.value, metrics); });
+      // Assign City-level entries to the org's specific SPA when known.
+      if (entry.geographyLevel === "City" && fallbackSpa) {
+        addToAggregation("SPA", fallbackSpa, metrics);
+      }
     }
   });
 

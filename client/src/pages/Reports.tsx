@@ -119,6 +119,18 @@ export default function Reports() {
   const { data: allEntries } = useImpactEntries(programId);
   const selectedProgram = programs?.find(p => p.id === programId);
 
+  // Resolve the effective zip (program zip > org zip) so entries without a
+  // stored geoContext can still be assigned to the correct SPA.
+  const [orgGeoContext, setOrgGeoContext] = useState<{ spa?: string; city?: string; county?: string; state?: string } | null>(null);
+  useEffect(() => {
+    const zip = ((selectedProgram as any)?.zipCode || (orgs?.[0] as any)?.addressZip || "").replace(/\D/g, "");
+    if (zip.length !== 5) { setOrgGeoContext(null); return; }
+    apiRequest("GET", `/api/zipcode/${zip}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(ctx => setOrgGeoContext(ctx))
+      .catch(() => setOrgGeoContext(null));
+  }, [selectedProgram?.id, (orgs?.[0] as any)?.addressZip]);
+
   const availableYears = useMemo(() => {
     if (!allEntries) return [];
     const years = new Set<number>();
@@ -164,19 +176,20 @@ export default function Reports() {
         if (ctx.county) addToAgg("County", ctx.county, mv);
         if (ctx.state)  addToAgg("State",  ctx.state,  mv);
       } else {
-        // No zip — add at recorded level and roll up to County/State only.
-        // Skip SPA rollup: a City entry maps to multiple SPAs which would
-        // double-count participants across SPAs incorrectly.
+        // No zip on entry — roll up to County/State only (skip multi-SPA guessing).
         addToAgg(entry.geographyLevel, entry.geographyValue, mv);
         getParentGeographies(entry.geographyLevel, entry.geographyValue)
           .filter(p => p.level !== "SPA")
-          .forEach(parent => {
-            addToAgg(parent.level, parent.value, mv);
-          });
+          .forEach(parent => { addToAgg(parent.level, parent.value, mv); });
+        // If the org/program zip resolves to a specific SPA, assign City-level
+        // entries there — it's a single known SPA, not a multi-SPA guess.
+        if (entry.geographyLevel === "City" && orgGeoContext?.spa) {
+          addToAgg("SPA", orgGeoContext.spa, mv);
+        }
       }
     });
     return Object.values(aggregation);
-  }, [stats, entries, selectedYear]);
+  }, [stats, entries, selectedYear, orgGeoContext]);
 
   const participantMetricNames = useMemo(() => {
     if (!selectedProgram) return new Set<string>();
