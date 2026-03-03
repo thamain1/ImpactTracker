@@ -246,7 +246,22 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Primary Level</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+                    <Select
+                      onValueChange={(val) => {
+                        field.onChange(val);
+                        if (geoContext) {
+                          const valueMap: Record<string, string | undefined> = {
+                            SPA: geoContext.spa,
+                            City: geoContext.city,
+                            County: geoContext.county,
+                            State: geoContext.state,
+                          };
+                          const resolved = valueMap[val];
+                          if (resolved) form.setValue("geographyValue", resolved);
+                        }
+                      }}
+                      value={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-edit-geo-level">
                           <SelectValue placeholder="Select level" />
