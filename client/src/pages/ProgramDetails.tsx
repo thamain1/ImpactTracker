@@ -162,7 +162,7 @@ export default function ProgramDetails() {
               Export CSV
             </Button>
             <ImportCsvDialog program={program} />
-            <AddImpactDialog program={program} />
+            <AddImpactDialog program={program} lastGeographyLevel={allEntries?.[0]?.geographyLevel} />
           </div>
         </div>
       </div>

@@ -120,7 +120,19 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
         if (res.ok) {
           const ctx: GeoContext = await res.json();
           setGeoContext(ctx);
-          if (ctx.spa) {
+          // Keep the saved geography level; just fill in the matching resolved value.
+          // Fall back to the most specific available level only if the saved level has no data.
+          const currentLevel = form.getValues("geographyLevel");
+          const valueMap: Record<string, string | undefined> = {
+            SPA: ctx.spa,
+            City: ctx.city,
+            County: ctx.county,
+            State: ctx.state,
+          };
+          const preferred = valueMap[currentLevel];
+          if (preferred) {
+            form.setValue("geographyValue", preferred);
+          } else if (ctx.spa) {
             form.setValue("geographyLevel", "SPA");
             form.setValue("geographyValue", ctx.spa);
           } else if (ctx.city) {

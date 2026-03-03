@@ -17,6 +17,7 @@ import type { ProgramResponse } from "@shared/routes";
 
 interface AddImpactDialogProps {
   program: ProgramResponse;
+  lastGeographyLevel?: string;
 }
 
 interface GeoContext {
@@ -49,7 +50,7 @@ const GEO_SUGGESTIONS: Record<string, string[]> = {
   State: ["California", "Oregon", "Washington", "Arizona", "Nevada"],
 };
 
-export function AddImpactDialog({ program }: AddImpactDialogProps) {
+export function AddImpactDialog({ program, lastGeographyLevel }: AddImpactDialogProps) {
   const [open, setOpen] = useState(false);
   const createImpact = useCreateImpactEntry();
   const [metricInputs, setMetricInputs] = useState<Record<string, string>>({});
@@ -62,7 +63,7 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
     defaultValues: {
       programId: program.id,
       date: new Date().toISOString().split("T")[0],
-      geographyLevel: "City" as "SPA" | "City" | "County" | "State",
+      geographyLevel: (lastGeographyLevel || "City") as "SPA" | "City" | "County" | "State",
       geographyValue: "",
       zipCode: "",
       demographics: "",
@@ -95,8 +96,19 @@ export function AddImpactDialog({ program }: AddImpactDialogProps) {
         if (res.ok) {
           const ctx: GeoContext = await res.json();
           setGeoContext(ctx);
-          // Auto-fill geography: most specific level first (SPA > City > County > State)
-          if (ctx.spa) {
+          // Keep whatever level is currently selected; just fill in the matching value.
+          // Fall back to the most specific available level only if the current level has no data.
+          const currentLevel = form.getValues("geographyLevel");
+          const valueMap: Record<string, string | undefined> = {
+            SPA: ctx.spa,
+            City: ctx.city,
+            County: ctx.county,
+            State: ctx.state,
+          };
+          const preferred = valueMap[currentLevel];
+          if (preferred) {
+            form.setValue("geographyValue", preferred);
+          } else if (ctx.spa) {
             form.setValue("geographyLevel", "SPA");
             form.setValue("geographyValue", ctx.spa);
           } else if (ctx.city) {
