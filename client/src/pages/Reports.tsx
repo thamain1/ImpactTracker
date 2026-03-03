@@ -175,7 +175,7 @@ export default function Reports() {
 
   const filteredStats = useMemo(() => {
     if (selectedYear === "all") return stats;
-    if (!entries || entries.length === 0) return [];
+    // Don't short-circuit when entries is empty — surveys still need to be counted below.
     const aggregation: Record<string, { geographyLevel: string; geographyValue: string; metrics: Record<string, number> }> = {};
 
     function addToAgg(level: string, value: string, mv: Record<string, number>) {

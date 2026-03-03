@@ -106,7 +106,8 @@ export async function resolveZipCode(zip: string): Promise<GeoContext | null> {
       const data = await res.json() as any[];
       if (data.length > 0) {
         const addr = data[0].address as Record<string, string>;
-        const city = addr.city || addr.town || addr.village || addr.suburb || addr.hamlet;
+        const city = addr.city || addr.town || addr.village || addr.suburb || addr.hamlet
+          || addr.county?.replace(/ County$/i, "");
         if (city) context.city = city;
         if (addr.county) context.county = addr.county;
         if (addr.state) context.state = addr.state;
