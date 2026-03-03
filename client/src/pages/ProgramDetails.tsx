@@ -99,6 +99,20 @@ export default function ProgramDetails() {
     return surveyResponses.filter((r: any) => new Date(r.createdAt + 'Z').getFullYear() === yr);
   }, [surveyResponses, selectedYear]);
 
+  // Deduplicated view of survey responses for the table — a single kiosk check-in creates
+  // one row per metric allocation (same createdAt), so we show only the first row per
+  // (createdAt, respondentType) group to avoid confusing duplicate display rows.
+  const dedupedSurveyResponses = useMemo(() => {
+    if (!surveyResponses) return [];
+    const seen = new Set<string>();
+    return surveyResponses.filter((r: any) => {
+      const key = `${r.createdAt}|${r.respondentType}|${r.email ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [surveyResponses]);
+
   const participantsByMonth = useMemo(() => {
     if (participantMetricNames.size === 0) return [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -663,14 +677,14 @@ export default function ProgramDetails() {
       </div>
 
       {/* Survey Responses Table */}
-      {surveyResponses && surveyResponses.length > 0 && (
+      {dedupedSurveyResponses.length > 0 && (
         <Card className="border-slate-200 shadow-sm">
           <CardHeader>
             <CardTitle className="font-heading text-lg flex items-center gap-2">
               <ClipboardList className="w-5 h-5 text-teal-600" />
               Survey Responses
               <Badge className="bg-teal-100 text-teal-700 border-teal-200 font-normal ml-1">
-                {surveyResponses.length}
+                {dedupedSurveyResponses.length}
               </Badge>
             </CardTitle>
           </CardHeader>
@@ -690,7 +704,7 @@ export default function ProgramDetails() {
                   </tr>
                 </thead>
                 <tbody>
-                  {surveyResponses.map((r: any) => (
+                  {dedupedSurveyResponses.map((r: any) => (
                     <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                       <td className="py-2.5 pl-2 text-slate-500 text-xs whitespace-nowrap">
                         {format(new Date(r.createdAt + 'Z'), "MMM d, yyyy h:mm a")}
