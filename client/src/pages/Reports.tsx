@@ -84,6 +84,14 @@ function useGeocode(locations: string[], serviceAreaList: ServiceArea[]) {
   return coords;
 }
 
+// CDPs / unincorporated areas → nearest major city (used to normalise census lookups)
+const CITY_CANONICAL_MAP: Record<string, string> = {
+  "willowbrook":      "Los Angeles",
+  "east los angeles": "Los Angeles",
+  "florence":         "Los Angeles",
+  "florence-graham":  "Los Angeles",
+};
+
 export default function Reports() {
   const { toast } = useToast();
   const { data: orgs } = useOrganizations();
@@ -178,11 +186,24 @@ export default function Reports() {
     return Array.from(unique.values());
   }, [filteredStats]);
 
-  const { data: censusData } = useCensusBatch(geoList);
+  // Normalised list for census lookups: no SPAs, CDPs collapsed to major city
+  const censusGeoList = useMemo(() => {
+    const unique = new Map<string, { level: string; value: string }>();
+    geoList.forEach(g => {
+      if (g.level === "SPA") return;
+      const canonical = g.level === "City"
+        ? (CITY_CANONICAL_MAP[g.value.toLowerCase()] ?? g.value)
+        : g.value;
+      unique.set(`${g.level}:${canonical}`, { level: g.level, value: canonical });
+    });
+    return Array.from(unique.values());
+  }, [geoList]);
+
+  const { data: censusData } = useCensusBatch(censusGeoList);
 
   const hasAgeTarget = !!(selectedProgram?.targetAgeMin != null || selectedProgram?.targetAgeMax != null);
   const { data: ageGroupData } = useCensusAgeGroups(
-    geoList,
+    censusGeoList,
     selectedProgram?.targetAgeMin,
     selectedProgram?.targetAgeMax,
   );
@@ -609,21 +630,12 @@ export default function Reports() {
               );
             };
 
-            // CDP / unincorporated area → nearest major city
-            const CITY_CANONICAL: Record<string, string> = {
-              "willowbrook": "Los Angeles",
-              "watts":       "Los Angeles",
-              "east los angeles": "Los Angeles",
-              "florence":    "Los Angeles",
-              "florence-graham": "Los Angeles",
-            };
-
             // Merge CDP/small-city entries into their major city
             const cityMap = new Map<string, { geographyLevel: string; geographyValue: string; metrics: Record<string, number> }>();
             filteredStats
               .filter(s => s.geographyLevel === "City")
               .forEach(s => {
-                const canonical = CITY_CANONICAL[s.geographyValue.toLowerCase()] ?? s.geographyValue;
+                const canonical = CITY_CANONICAL_MAP[s.geographyValue.toLowerCase()] ?? s.geographyValue;
                 const existing = cityMap.get(canonical);
                 if (existing) {
                   Object.keys(s.metrics).forEach(k => {
@@ -989,13 +1001,16 @@ export default function Reports() {
                     return order.indexOf(a.geographyLevel) - order.indexOf(b.geographyLevel);
                   })
                   .map((census, i) => {
-                  const matchingStat = filteredStats?.find(
-                    s => s.geographyLevel === census.geographyLevel && s.geographyValue === census.geographyValue
-                  );
                   let impactTotal = 0;
-                  if (matchingStat) {
-                    participantMetricNames.forEach(name => { impactTotal += Number(matchingStat.metrics[name] || 0); });
-                  }
+                  filteredStats?.forEach(s => {
+                    if (s.geographyLevel !== census.geographyLevel) return;
+                    const canonical = census.geographyLevel === "City"
+                      ? (CITY_CANONICAL_MAP[s.geographyValue.toLowerCase()] ?? s.geographyValue)
+                      : s.geographyValue;
+                    if (canonical === census.geographyValue) {
+                      participantMetricNames.forEach(name => { impactTotal += Number(s.metrics[name] || 0); });
+                    }
+                  });
                   const reachPercent = census.totalPopulation && impactTotal > 0
                     ? Math.round((impactTotal / census.totalPopulation) * 10000) / 100
                     : null;
@@ -1084,13 +1099,16 @@ export default function Reports() {
               </p>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {ageGroupData.map((geo, i) => {
-                  const matchingStat = filteredStats?.find(
-                    s => s.geographyLevel === geo.geographyLevel && s.geographyValue === geo.geographyValue
-                  );
                   let impactTotal = 0;
-                  if (matchingStat) {
-                    participantMetricNames.forEach(name => { impactTotal += Number(matchingStat.metrics[name] || 0); });
-                  }
+                  filteredStats?.forEach(s => {
+                    if (s.geographyLevel !== geo.geographyLevel) return;
+                    const canonical = geo.geographyLevel === "City"
+                      ? (CITY_CANONICAL_MAP[s.geographyValue.toLowerCase()] ?? s.geographyValue)
+                      : s.geographyValue;
+                    if (canonical === geo.geographyValue) {
+                      participantMetricNames.forEach(name => { impactTotal += Number(s.metrics[name] || 0); });
+                    }
+                  });
                   const targetPop = geo.targetAgePopulation;
                   const ageReachPercent = targetPop && impactTotal > 0
                     ? Math.round((impactTotal / targetPop) * 10000) / 100
