@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
+import { getParentGeographies } from "@shared/geography";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Download, FileBarChart, FileText, Table2, TrendingUp, DollarSign, AlertTriangle, Info, Users, MapPin, Target, Calendar, ClipboardList, Loader2, ChevronDown, Sparkles } from "lucide-react";
 import {
@@ -186,25 +187,25 @@ export default function Reports() {
     return Array.from(unique.values());
   }, [filteredStats]);
 
-  // Normalised list for census lookups: CDPs collapsed to major city, SPAs kept.
-  // When only SPAs are present (no direct City/County/State entries), also add
-  // LA/LA County/California so synthetic top-3 cards get population data.
+  // Normalised list for census lookups:
+  // - CDPs collapsed to their major city
+  // - Every entry is expanded to include its parent geographies (County, State,
+  //   SPAs, etc.) via getParentGeographies — so City-only programs get County,
+  //   State, and SPA census data automatically without needing zip codes.
   const censusGeoList = useMemo(() => {
     const unique = new Map<string, { level: string; value: string }>();
+    const addGeo = (level: string, value: string) => {
+      unique.set(`${level}:${value}`, { level, value });
+    };
     geoList.forEach(g => {
       const canonical = g.level === "City"
         ? (CITY_CANONICAL_MAP[g.value.toLowerCase()] ?? g.value)
         : g.value;
-      unique.set(`${g.level}:${canonical}`, { level: g.level, value: canonical });
+      addGeo(g.level, canonical);
+      // Expand to parents — gives County+State for City entries, SPA+City for
+      // SPA entries, etc. One level of expansion is enough (no recursion needed).
+      getParentGeographies(g.level, canonical).forEach(p => addGeo(p.level, p.value));
     });
-    const vals = Array.from(unique.values());
-    const hasSpa    = vals.some(g => g.level === "SPA");
-    const hasCity   = vals.some(g => g.level === "City");
-    const hasCounty = vals.some(g => g.level === "County");
-    const hasState  = vals.some(g => g.level === "State");
-    if (hasSpa && !hasCity)   unique.set("City:Los Angeles",          { level: "City",   value: "Los Angeles" });
-    if (hasSpa && !hasCounty) unique.set("County:Los Angeles County", { level: "County", value: "Los Angeles County" });
-    if (hasSpa && !hasState)  unique.set("State:California",          { level: "State",  value: "California" });
     return Array.from(unique.values());
   }, [geoList]);
 
@@ -676,10 +677,20 @@ export default function Reports() {
               });
               return m;
             };
-            const hasSpaEntries = filteredStats.some(s => s.geographyLevel === "SPA");
-            const knownCounty   = countyEntries[0]?.geographyValue ?? (hasSpaEntries ? "Los Angeles County" : "Los Angeles County");
-            const knownState    = stateEntries[0]?.geographyValue  ?? "California";
-            const knownCity     = primaryCity?.geographyValue       ?? (knownCounty === "Los Angeles County" ? "Los Angeles" : "Los Angeles");
+            // Derive fallback names by walking parent geographies of whatever is present
+            const anyEntry = filteredStats[0];
+            const inferredParents = anyEntry
+              ? getParentGeographies(anyEntry.geographyLevel, anyEntry.geographyValue)
+              : [];
+            const knownCounty = countyEntries[0]?.geographyValue
+              ?? inferredParents.find(p => p.level === "County")?.value
+              ?? "Los Angeles County";
+            const knownState  = stateEntries[0]?.geographyValue
+              ?? inferredParents.find(p => p.level === "State")?.value
+              ?? "California";
+            const knownCity   = primaryCity?.geographyValue
+              ?? inferredParents.find(p => p.level === "City")?.value
+              ?? "Los Angeles";
             const synMetrics    = makeSyntheticMetrics();
             const effectiveCity   = primaryCity      ?? { geographyLevel: "City",   geographyValue: knownCity,   metrics: synMetrics };
             const effectiveCounty = countyEntries[0] ?? { geographyLevel: "County", geographyValue: knownCounty, metrics: synMetrics };
