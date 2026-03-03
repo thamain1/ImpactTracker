@@ -543,11 +543,19 @@ export function generateImpactStudyPdf(data: ReportData) {
 
     drawSubHeader(`Target Age Population (Ages ${ageRange})`);
 
-    const ageTableData = ageGroupData.map(a => [
-      `${a.geographyValue} (${a.geographyLevel})`,
-      a.targetAgePopulation != null ? formatNumber(a.targetAgePopulation) : "N/A",
-      a.totalPopulation != null ? formatNumber(a.totalPopulation) : "N/A",
-    ]);
+    const ageTableData = ageGroupData.map(a => {
+      const agePop   = a.targetAgePopulation ?? null;
+      const totalPop = a.totalPopulation ?? null;
+      // If age pop is < 5% of total, Census API returned implausibly small data — suppress it
+      const agePopDisplay = (agePop && totalPop && agePop > totalPop * 0.05)
+        ? formatNumber(agePop)
+        : "N/A";
+      return [
+        `${a.geographyValue} (${a.geographyLevel})`,
+        agePopDisplay,
+        totalPop != null ? formatNumber(totalPop) : "N/A",
+      ];
+    });
 
     checkPageBreak(15 + ageTableData.length * 8);
     autoTable(doc, {
@@ -639,7 +647,13 @@ export function generateImpactStudyPdf(data: ReportData) {
     const census = censusData.find(c => c.geographyLevel === s.geographyLevel && c.geographyValue === s.geographyValue);
     const agePop = ageGroupData.find(a => a.geographyLevel === s.geographyLevel && a.geographyValue === s.geographyValue);
 
-    const usePop = agePop?.targetAgePopulation || census?.totalPopulation || null;
+    const rawAgePop = agePop?.targetAgePopulation ?? null;
+    const totalPop  = census?.totalPopulation ?? null;
+    // Guard: if age-group population is implausibly small (< 5% of total census pop),
+    // the Census API returned bad data — fall back to total population.
+    const usePop = (rawAgePop && totalPop && rawAgePop > totalPop * 0.05)
+      ? rawAgePop
+      : (totalPop ?? rawAgePop);
     const reachPct = usePop ? (val / usePop) * 100 : null;
 
     return [

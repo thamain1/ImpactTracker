@@ -422,12 +422,17 @@ async function fetchAgeDataForGeography(
       if (!stateData || stateData.length < 2) continue;
       const normalized = geographyValue.toLowerCase().trim();
       const exactPattern = `${normalized} city,`;
+      const cdpPattern   = `${normalized} cdp,`;
+      const townPattern  = `${normalized} town,`;
+      let bestRow: string[] | null = null;
+      let bestScore = 0;
       for (let i = 1; i < stateData.length; i++) {
-        if ((stateData[i][0] || "").toLowerCase().startsWith(exactPattern)) {
-          data = [stateData[0], stateData[i]]; break;
-        }
+        const name = (stateData[i][0] || "").toLowerCase();
+        if (name.startsWith(exactPattern) && bestScore < 100) { bestRow = stateData[i]; bestScore = 100; break; }
+        if (name.startsWith(cdpPattern)   && bestScore < 80)  { bestRow = stateData[i]; bestScore = 80; }
+        if (name.startsWith(townPattern)  && bestScore < 70)  { bestRow = stateData[i]; bestScore = 70; }
       }
-      if (data) break;
+      if (bestRow) { data = [stateData[0], bestRow]; break; }
     }
   }
 
