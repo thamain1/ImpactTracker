@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@shared/routes";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
+import { useOrganizations } from "@/hooks/use-organizations";
 
 export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
@@ -34,6 +35,8 @@ export default function ProgramDetails() {
   const [selectedYear, setSelectedYear] = useState<string>("all");
 
   const { user } = useAuth();
+  const { data: orgs } = useOrganizations();
+  const orgZip = (orgs?.[0] as any)?.addressZip || undefined;
   const { data: program, isLoading: progLoading } = useProgram(programId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: allEntries, isLoading: entriesLoading } = useImpactEntries(programId);
@@ -161,8 +164,8 @@ export default function ProgramDetails() {
               <Download className="w-4 h-4 mr-2" />
               Export CSV
             </Button>
-            <ImportCsvDialog program={program} />
-            <AddImpactDialog program={program} lastGeographyLevel={allEntries?.[0]?.geographyLevel} />
+            <ImportCsvDialog program={program} orgZip={orgZip} />
+            <AddImpactDialog program={program} lastGeographyLevel={allEntries?.[0]?.geographyLevel} orgZip={orgZip} />
           </div>
         </div>
       </div>

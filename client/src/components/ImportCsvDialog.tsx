@@ -10,6 +10,7 @@ import type { ProgramResponse } from "@shared/routes";
 
 interface ImportCsvDialogProps {
   program: ProgramResponse;
+  orgZip?: string;
 }
 
 type Step = "upload" | "preview" | "result";
@@ -59,7 +60,7 @@ function parseCSVText(text: string): { headers: string[]; rows: Record<string, s
   return { headers, rows };
 }
 
-export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
+export function ImportCsvDialog({ program, orgZip }: ImportCsvDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("upload");
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
@@ -82,7 +83,7 @@ export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
       "pct_housing_secured", "pct_grade_improvement", "pct_recidivism_reduction",
     ];
     const exampleRow = [
-      "01/15/26", "90003", "", "",
+      "01/15/26", orgZip || "90003", "", "",
       ...metricNames.map(() => "0"),
       "", "", "", "", "", "", "",
     ];
@@ -126,8 +127,12 @@ export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
 
         const hasZip = /^\d{5}$/.test((row.zip_code || "").replace(/\D/g, ""));
         const hasManualGeo = row.geography_level?.trim() && row.geography_value?.trim();
-        if (!hasZip && !hasManualGeo)
+        // Fall back to org default zip when the row has no zip and no manual geography
+        if (!hasZip && !hasManualGeo && orgZip) {
+          row = { ...row, zip_code: orgZip };
+        } else if (!hasZip && !hasManualGeo) {
           return { raw: row, valid: false, reason: "Missing geography (zip or level+value)" };
+        }
 
         const hasMetric = metricNames.some(n => row[n] !== undefined && row[n] !== "");
         if (!hasMetric)

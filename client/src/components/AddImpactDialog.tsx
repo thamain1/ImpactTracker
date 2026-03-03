@@ -18,6 +18,7 @@ import type { ProgramResponse } from "@shared/routes";
 interface AddImpactDialogProps {
   program: ProgramResponse;
   lastGeographyLevel?: string;
+  orgZip?: string;
 }
 
 interface GeoContext {
@@ -50,7 +51,7 @@ const GEO_SUGGESTIONS: Record<string, string[]> = {
   State: ["California", "Oregon", "Washington", "Arizona", "Nevada"],
 };
 
-export function AddImpactDialog({ program, lastGeographyLevel }: AddImpactDialogProps) {
+export function AddImpactDialog({ program, lastGeographyLevel, orgZip }: AddImpactDialogProps) {
   const [open, setOpen] = useState(false);
   const createImpact = useCreateImpactEntry();
   const [metricInputs, setMetricInputs] = useState<Record<string, string>>({});
@@ -65,7 +66,7 @@ export function AddImpactDialog({ program, lastGeographyLevel }: AddImpactDialog
       date: new Date().toISOString().split("T")[0],
       geographyLevel: (lastGeographyLevel || "City") as "SPA" | "City" | "County" | "State",
       geographyValue: "",
-      zipCode: "",
+      zipCode: orgZip || "",
       demographics: "",
       outcomes: "",
       metricValues: {} as Record<string, number>,
@@ -80,6 +81,13 @@ export function AddImpactDialog({ program, lastGeographyLevel }: AddImpactDialog
   const geoLevel = form.watch("geographyLevel");
   const zipValue = form.watch("zipCode");
   const suggestions = GEO_SUGGESTIONS[geoLevel] || [];
+
+  // When the dialog opens, seed the zip from the org default if not already set
+  useEffect(() => {
+    if (open && orgZip) {
+      form.setValue("zipCode", orgZip);
+    }
+  }, [open]);
 
   // Auto-resolve zip code as user types (debounced)
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { apiRequest } from "@/lib/queryClient";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { useUserRoles, useAddUserRole, useDeleteUserRole } from "@/hooks/use-user-roles";
@@ -19,7 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, EyeOff, MapPin, Plus, Lock, User } from "lucide-react";
+import { Loader2, Trash2, UserPlus, Building2, Save, Target, Eye, EyeOff, MapPin, Plus, Lock, User, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { api, buildUrl } from "@shared/routes";
 
@@ -45,7 +45,10 @@ export default function Settings() {
 
   const [orgForm, setOrgForm] = useState({
     name: "",
-    address: "",
+    addressStreet: "",
+    addressCity: "",
+    addressState: "",
+    addressZip: "",
     phone: "",
     website: "",
     contactEmail: "",
@@ -55,6 +58,10 @@ export default function Settings() {
     targetPopulationFocus: "",
     primaryFundingType: "",
   });
+
+  const [zipGeoContext, setZipGeoContext] = useState<{ spa?: string; city?: string; county?: string; state?: string } | null>(null);
+  const [zipLooking, setZipLooking] = useState(false);
+  const zipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("can_view");
@@ -119,7 +126,10 @@ export default function Settings() {
     if (org) {
       setOrgForm({
         name: org.name || "",
-        address: (org as any).address || "",
+        addressStreet: (org as any).addressStreet || "",
+        addressCity: (org as any).addressCity || "",
+        addressState: (org as any).addressState || "",
+        addressZip: (org as any).addressZip || "",
         phone: (org as any).phone || "",
         website: (org as any).website || "",
         contactEmail: (org as any).contactEmail || "",
@@ -131,6 +141,28 @@ export default function Settings() {
       });
     }
   }, [org]);
+
+  // Resolve org zip on change
+  useEffect(() => {
+    if (zipTimer.current) clearTimeout(zipTimer.current);
+    const zip = orgForm.addressZip.replace(/\D/g, "");
+    if (zip.length !== 5) {
+      setZipGeoContext(null);
+      return;
+    }
+    zipTimer.current = setTimeout(async () => {
+      setZipLooking(true);
+      try {
+        const res = await apiRequest("GET", `/api/zipcode/${zip}`);
+        setZipGeoContext(res.ok ? await res.json() : null);
+      } catch {
+        setZipGeoContext(null);
+      } finally {
+        setZipLooking(false);
+      }
+    }, 500);
+    return () => { if (zipTimer.current) clearTimeout(zipTimer.current); };
+  }, [orgForm.addressZip]);
 
   const saveOrgProfile = async () => {
     if (!orgId) return;
@@ -275,15 +307,65 @@ export default function Settings() {
           </div>
 
           <div>
-            <Label htmlFor="org-address">Address</Label>
+            <Label htmlFor="org-address-street">Street Address</Label>
             <Input
-              id="org-address"
-              value={orgForm.address}
-              onChange={e => setOrgForm(f => ({ ...f, address: e.target.value }))}
-              placeholder="123 Main St, Los Angeles, CA 90012"
-              data-testid="input-org-address"
+              id="org-address-street"
+              value={orgForm.addressStreet}
+              onChange={e => setOrgForm(f => ({ ...f, addressStreet: e.target.value }))}
+              placeholder="123 Main St"
+              data-testid="input-org-address-street"
             />
           </div>
+
+          <div className="grid sm:grid-cols-3 gap-4">
+            <div className="sm:col-span-1">
+              <Label htmlFor="org-address-city">City</Label>
+              <Input
+                id="org-address-city"
+                value={orgForm.addressCity}
+                onChange={e => setOrgForm(f => ({ ...f, addressCity: e.target.value }))}
+                placeholder="Los Angeles"
+                data-testid="input-org-address-city"
+              />
+            </div>
+            <div>
+              <Label htmlFor="org-address-state">State</Label>
+              <Input
+                id="org-address-state"
+                value={orgForm.addressState}
+                onChange={e => setOrgForm(f => ({ ...f, addressState: e.target.value }))}
+                placeholder="CA"
+                maxLength={2}
+                data-testid="input-org-address-state"
+              />
+            </div>
+            <div>
+              <Label htmlFor="org-address-zip" className="flex items-center gap-1.5">
+                ZIP Code
+                {zipLooking && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+                {zipGeoContext && !zipLooking && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+              </Label>
+              <Input
+                id="org-address-zip"
+                value={orgForm.addressZip}
+                onChange={e => setOrgForm(f => ({ ...f, addressZip: e.target.value }))}
+                placeholder="90012"
+                maxLength={5}
+                data-testid="input-org-address-zip"
+              />
+            </div>
+          </div>
+
+          {zipGeoContext && (
+            <div className="flex flex-wrap gap-1.5 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+              <MapPin className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {[zipGeoContext.spa, zipGeoContext.city, zipGeoContext.county, zipGeoContext.state]
+                .filter(Boolean)
+                .map((v, i, arr) => (
+                  <span key={v}>{v}{i < arr.length - 1 ? " ·" : ""}</span>
+                ))}
+            </div>
+          )}
 
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
