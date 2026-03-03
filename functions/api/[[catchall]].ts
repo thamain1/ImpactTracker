@@ -775,7 +775,7 @@ app.get("/api/impact/stats", async (c) => {
   if (fallbackGeo) {
     const { data: surveyRows } = await supabase
       .from("survey_responses")
-      .select("metric_id, quantity_delivered, impact_metrics(name)")
+      .select("metric_id, quantity_delivered, impact_metrics(name, counts_as_participant)")
       .eq("program_id", programId)
       .eq("respondent_type", "participant");
 
@@ -786,7 +786,10 @@ app.get("/api/impact/stats", async (c) => {
       const primaryMetric = participantMetrics[0]?.name || (metricsRows || [])[0]?.name;
 
       surveyRows.forEach((row: any) => {
-        const metricName = (row.impact_metrics as any)?.name ?? primaryMetric;
+        const metric = row.impact_metrics as any;
+        // Skip rows for non-participant metrics (e.g. physical items that don't count as people)
+        if (metric && metric.counts_as_participant === false) return;
+        const metricName = metric?.name ?? primaryMetric;
         if (!metricName) return;
         const qty = row.quantity_delivered ?? 1;
         const mv = { [metricName]: qty };

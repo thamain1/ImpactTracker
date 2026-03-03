@@ -209,6 +209,7 @@ export default function Reports() {
     if (primaryMetric) {
       filteredSurveys?.forEach((resp: any) => {
         if (resp.respondentType !== "participant") return;
+        if (resp.metricId != null && !participantMetricIds.has(resp.metricId)) return;
         const mv = { [primaryMetric]: 1 };
         if (orgGeoContext?.spa)    addToAgg("SPA",    orgGeoContext.spa,    mv);
         if (orgGeoContext?.city)   addToAgg("City",   orgGeoContext.city,   mv);
@@ -218,13 +219,20 @@ export default function Reports() {
     }
 
     return Object.values(aggregation);
-  }, [stats, entries, selectedYear, orgGeoContext, surveyResponses, selectedProgram]);
+  }, [stats, entries, selectedYear, orgGeoContext, surveyResponses, selectedProgram, participantMetricIds]);
 
   const participantMetricNames = useMemo(() => {
     if (!selectedProgram) return new Set<string>();
     const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
     if (participant.length > 0) return new Set(participant.map((m: any) => m.name));
     return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].name]) : new Set<string>();
+  }, [selectedProgram]);
+
+  const participantMetricIds = useMemo(() => {
+    if (!selectedProgram) return new Set<number>();
+    const participant = selectedProgram.metrics.filter((m: any) => m.countsAsParticipant !== false);
+    if (participant.length > 0) return new Set(participant.map((m: any) => m.id as number));
+    return selectedProgram.metrics.length > 0 ? new Set([selectedProgram.metrics[0].id as number]) : new Set<number>();
   }, [selectedProgram]);
 
   const primaryMetric = selectedProgram?.metrics.find((m: any) => m.countsAsParticipant !== false)?.name || selectedProgram?.metrics[0]?.name || "";
@@ -292,34 +300,54 @@ export default function Reports() {
   const geoCoords = useGeocode(serviceAreaLocations, serviceAreaList);
 
   const participantsByMonth = useMemo(() => {
-    if (!entries || participantMetricNames.size === 0) return [];
+    if (participantMetricNames.size === 0) return [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthCounts: Record<number, number> = {};
-    entries.forEach(entry => {
+    (entries || []).forEach(entry => {
       const month = new Date(entry.date + "T00:00:00").getMonth();
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
+    // Survey responses — 1 per check-in for participant metrics only
+    (surveyResponses || []).forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
+      if (selectedYear !== "all") {
+        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        if (yr !== parseInt(selectedYear)) return;
+      }
+      const month = new Date(r.createdAt + 'Z').getMonth();
+      monthCounts[month] = (monthCounts[month] || 0) + 1;
+    });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, participantMetricNames]);
+  }, [entries, participantMetricNames, surveyResponses, participantMetricIds, selectedYear]);
 
   const goalData = useMemo(() => {
-    if (!selectedProgram || !entries || participantMetricNames.size === 0) return null;
+    if (!selectedProgram) return null;
     let goalTarget: number | null = null;
     if (selectedProgram.goals) {
       const match = selectedProgram.goals.match(/(\d[\d,]*)/);
       if (match) goalTarget = parseInt(match[1].replace(/,/g, ''), 10);
     }
-    const actual = entries.reduce((sum, entry) => {
+    const entryActual = (entries || []).reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       return sum + total;
     }, 0);
-    return { goalTarget, actual, goals: selectedProgram.goals };
-  }, [selectedProgram, entries, participantMetricNames]);
+    const surveyActual = (surveyResponses || []).filter((r: any) => {
+      if (r.respondentType !== "participant") return false;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return false;
+      if (selectedYear !== "all") {
+        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        if (yr !== parseInt(selectedYear)) return false;
+      }
+      return true;
+    }).length;
+    return { goalTarget, actual: entryActual + surveyActual, goals: selectedProgram.goals };
+  }, [selectedProgram, entries, participantMetricNames, surveyResponses, participantMetricIds, selectedYear]);
 
   const totalCensusPop = useMemo(() => {
     if (!censusData) return 0;
@@ -332,14 +360,18 @@ export default function Reports() {
   }, [ageGroupData]);
 
   const totalImpact = useMemo(() => {
-    if (!entries || participantMetricNames.size === 0) return 0;
-    return entries.reduce((sum, entry) => {
+    const entryTotal = (entries || []).reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       return sum + total;
     }, 0);
-  }, [entries, participantMetricNames]);
+    const surveyTotal = (surveyResponses || []).filter((r: any) =>
+      r.respondentType === "participant" &&
+      (r.metricId == null || participantMetricIds.has(r.metricId))
+    ).length;
+    return entryTotal + surveyTotal;
+  }, [entries, participantMetricNames, surveyResponses, participantMetricIds]);
 
   const handleCsvDownload = async () => {
     const res = await apiRequest("GET", `${api.impact.exportCsv.path}?programId=${programId}`);
