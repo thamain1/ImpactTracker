@@ -33,6 +33,10 @@ const CITY_TO_COUNTY: Record<string, string> = {
   "arcadia": "Los Angeles County",
   "diamond bar": "Los Angeles County",
   "watts": "Los Angeles County",
+  "willowbrook": "Los Angeles County",
+  "east los angeles": "Los Angeles County",
+  "florence": "Los Angeles County",
+  "florence-graham": "Los Angeles County",
   "san diego": "San Diego County",
   "san francisco": "San Francisco County",
   "san jose": "Santa Clara County",
@@ -121,6 +125,18 @@ const CITY_TO_SPA: Record<string, string[]> = {
   "lynwood": ["SPA 6"],
   "diamond bar": ["SPA 3"],
   "watts": ["SPA 6"],
+  "willowbrook": ["SPA 6"],
+  "east los angeles": ["SPA 7"],
+  "florence": ["SPA 6"],
+  "florence-graham": ["SPA 6"],
+};
+
+// CDPs and unincorporated areas → nearest major city (for City-level rollup)
+const CITY_TO_MAJOR_CITY: Record<string, string> = {
+  "willowbrook": "Los Angeles",
+  "east los angeles": "Los Angeles",
+  "florence": "Los Angeles",
+  "florence-graham": "Los Angeles",
 };
 
 const SPA_TO_COUNTY = "Los Angeles County";
@@ -153,6 +169,8 @@ export function getParentGeographies(level: string, value: string): GeoHierarchy
       if (spas) {
         spas.forEach(spa => parents.push({ level: "SPA", value: spa }));
       }
+      const majorCity = CITY_TO_MAJOR_CITY[normalizedValue];
+      if (majorCity) parents.push({ level: "City", value: majorCity });
       break;
     }
     case "County": {

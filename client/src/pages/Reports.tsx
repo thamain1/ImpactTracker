@@ -609,10 +609,42 @@ export default function Reports() {
               );
             };
 
-            const spaEntries    = filteredStats.filter(s => s.geographyLevel === "SPA");
-            const cityEntries   = filteredStats.filter(s => s.geographyLevel === "City");
+            // CDP / unincorporated area → nearest major city
+            const CITY_CANONICAL: Record<string, string> = {
+              "willowbrook": "Los Angeles",
+              "watts":       "Los Angeles",
+              "east los angeles": "Los Angeles",
+              "florence":    "Los Angeles",
+              "florence-graham": "Los Angeles",
+            };
+
+            // Merge CDP/small-city entries into their major city
+            const cityMap = new Map<string, { geographyLevel: string; geographyValue: string; metrics: Record<string, number> }>();
+            filteredStats
+              .filter(s => s.geographyLevel === "City")
+              .forEach(s => {
+                const canonical = CITY_CANONICAL[s.geographyValue.toLowerCase()] ?? s.geographyValue;
+                const existing = cityMap.get(canonical);
+                if (existing) {
+                  Object.keys(s.metrics).forEach(k => {
+                    existing.metrics[k] = (existing.metrics[k] || 0) + Number(s.metrics[k]);
+                  });
+                } else {
+                  cityMap.set(canonical, { ...s, geographyValue: canonical });
+                }
+              });
+
+            // Pick the city entry with the highest census population
+            const cityEntries = Array.from(cityMap.values());
+            const primaryCity = cityEntries.reduce<typeof cityEntries[0] | null>((best, cur) => {
+              const bestPop = censusData?.find(c => c.geographyLevel === "City" && c.geographyValue === best?.geographyValue)?.totalPopulation ?? 0;
+              const curPop  = censusData?.find(c => c.geographyLevel === "City" && c.geographyValue === cur.geographyValue)?.totalPopulation ?? 0;
+              return (!best || curPop > bestPop) ? cur : best;
+            }, null);
+
             const countyEntries = filteredStats.filter(s => s.geographyLevel === "County");
             const stateEntries  = filteredStats.filter(s => s.geographyLevel === "State");
+            const topCards = [primaryCity, countyEntries[0] ?? null, stateEntries[0] ?? null].filter(Boolean) as typeof cityEntries;
 
             return (
               <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
@@ -625,10 +657,7 @@ export default function Reports() {
                     <p className="text-xs text-muted-foreground">Participants Served</p>
                   </CardContent>
                 </Card>
-                {spaEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                {cityEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                {countyEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
-                {stateEntries.map(s => <GeoValueCard key={s.geographyValue} stat={s} />)}
+                {topCards.map(s => <GeoValueCard key={`${s.geographyLevel}:${s.geographyValue}`} stat={s} />)}
               </div>
             );
           })()}
