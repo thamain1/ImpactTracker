@@ -112,6 +112,9 @@ app.get("/health", (c) => {
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
 app.use("/api/*", async (c, next) => {
+  // Public survey endpoints — no auth required
+  if (c.req.path.startsWith("/api/survey/")) return next();
+
   const token = c.req.header("Authorization")?.replace("Bearer ", "");
   if (!token) return c.json({ message: "Unauthorized" }, 401);
   try {
@@ -659,7 +662,7 @@ app.get("/api/impact/stats", async (c) => {
 
   // Resolve the effective zip (program zip > org zip) for assigning entries
   // without geoContext to the correct single SPA.
-  let fallbackSpa: string | null = null;
+  let fallbackGeo: { spa?: string; city?: string; county?: string; state?: string } | null = null;
   const { data: progRow } = await supabase.from("programs").select("zip_code, org_id").eq("id", programId).maybeSingle();
   if (progRow) {
     const { data: orgRow } = await supabase.from("organizations").select("address_zip, address").eq("id", progRow.org_id).maybeSingle();
@@ -668,7 +671,7 @@ app.get("/api/impact/stats", async (c) => {
     const effectiveZip = rawZip.replace(/\D/g, "");
     if (effectiveZip.length === 5) {
       const resolved = await resolveZipCode(effectiveZip);
-      fallbackSpa = (resolved as any)?.spa ?? null;
+      fallbackGeo = (resolved as any) ?? null;
     }
   }
 
@@ -697,11 +700,29 @@ app.get("/api/impact/stats", async (c) => {
         .filter(p => p.level !== "SPA")
         .forEach(parent => { addToAggregation(parent.level, parent.value, metrics); });
       // Assign City-level entries to the org's specific SPA when known.
-      if (entry.geographyLevel === "City" && fallbackSpa) {
-        addToAggregation("SPA", fallbackSpa, metrics);
+      if (entry.geographyLevel === "City" && fallbackGeo?.spa) {
+        addToAggregation("SPA", fallbackGeo.spa, metrics);
       }
     }
   });
+
+  // Survey participant counts — each response = 1 for their chosen resource
+  if (fallbackGeo) {
+    const { data: surveyRows } = await supabase
+      .from("survey_responses")
+      .select("resource_selected")
+      .eq("program_id", programId)
+      .eq("respondent_type", "participant");
+
+    (surveyRows || []).forEach((row: any) => {
+      if (!row.resource_selected) return;
+      const mv = { [row.resource_selected]: 1 };
+      if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
+      if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
+      if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);
+      if (fallbackGeo!.state)  addToAggregation("State",  fallbackGeo!.state,  mv);
+    });
+  }
 
   const stats: unknown[] = [];
   Object.entries(aggregation).forEach(([level, values]) => {
@@ -1153,6 +1174,93 @@ app.post("/api/programs/:id/import-csv", async (c) => {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return c.json({ message: msg }, 500);
   }
+});
+
+// ─── Survey (public) ──────────────────────────────────────────────────────────
+
+const surveyResponseSchema = z.object({
+  respondentType:   z.enum(["participant", "supporter"]),
+  // Accept a single string OR an array (participant can select multiple resources)
+  resourceSelected: z.union([z.string(), z.array(z.string())]).optional().nullable(),
+  email:            z.string().email().optional().or(z.literal("")).nullable(),
+  sex:              z.string().optional().nullable(),
+  ageRange:         z.string().optional().nullable(),
+  familySize:       z.number().int().min(1).max(20).optional().nullable(),
+  householdIncome:  z.string().optional().nullable(),
+});
+
+app.get("/api/survey/:programId", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const programId = Number(c.req.param("programId"));
+  if (isNaN(programId)) return c.json({ message: "Invalid program" }, 400);
+
+  const { data: prog } = await supabase
+    .from("programs").select("id, name, org_id").eq("id", programId).maybeSingle();
+  if (!prog) return c.json({ message: "Program not found" }, 404);
+
+  const { data: org } = await supabase
+    .from("organizations").select("name, mission").eq("id", prog.org_id).maybeSingle();
+
+  const { data: metrics } = await supabase
+    .from("impact_metrics").select("name, unit").eq("program_id", programId);
+
+  return c.json({
+    programId,
+    programName: prog.name,
+    orgName: org?.name ?? "",
+    orgMission: org?.mission ?? "",
+    metrics: (metrics || []).map((m: any) => ({ name: m.name, unit: m.unit })),
+  });
+});
+
+app.post("/api/survey/:programId/respond", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const programId = Number(c.req.param("programId"));
+  if (isNaN(programId)) return c.json({ message: "Invalid program" }, 400);
+
+  try {
+    const body = await c.req.json();
+    const input = surveyResponseSchema.parse(body);
+
+    // Normalize resourceSelected to an array (may be string, string[], or null)
+    const rawRes = input.resourceSelected;
+    const resourceList: (string | null)[] =
+      Array.isArray(rawRes) && rawRes.length > 0 ? rawRes
+      : typeof rawRes === "string" && rawRes ? [rawRes]
+      : [null];
+
+    const base = {
+      program_id: programId,
+      respondent_type: input.respondentType,
+      email: input.email || null,
+      sex: input.sex ?? null,
+      age_range: input.ageRange ?? null,
+      family_size: input.familySize ?? null,
+      household_income: input.householdIncome ?? null,
+    };
+
+    // Insert one row per selected resource so each counts individually in stats
+    const rows = resourceList.map(r => ({ ...base, resource_selected: r }));
+    const { error } = await supabase.from("survey_responses").insert(rows);
+    if (error) throw error;
+    return c.json({ success: true }, 201);
+  } catch (err) {
+    if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
+    throw err;
+  }
+});
+
+// ─── Survey Responses (authenticated) ────────────────────────────────────────
+
+app.get("/api/survey-responses", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const programId = Number(c.req.query("programId"));
+  if (isNaN(programId)) return c.json([], 200);
+  if (!(await userOwnsProgram(supabase, user.id, programId))) return c.json([], 200);
+  const { data } = await supabase
+    .from("survey_responses").select("*").eq("program_id", programId);
+  return c.json((data || []).map((r: any) => toCamel(r)));
 });
 
 // ─── Error handler ────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { usePrograms } from "@/hooks/use-programs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useImpactStats, useImpactEntries } from "@/hooks/use-impact";
+import { useSurveyResponses } from "@/hooks/use-survey";
 import { useCensusBatch, useCensusAgeGroups } from "@/hooks/use-census";
 import { getParentGeographies } from "@shared/geography";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -117,6 +118,7 @@ export default function Reports() {
   const programId = parseInt(selectedProgramId);
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
   const { data: allEntries } = useImpactEntries(programId);
+  const { data: surveyResponses } = useSurveyResponses(programId);
   const selectedProgram = programs?.find(p => p.id === programId);
 
   // Resolve the effective zip (program zip > org zip) so entries without a
@@ -194,8 +196,23 @@ export default function Reports() {
         }
       }
     });
+    // Only add survey counts in the year-filtered path; the server already
+    // includes them when selectedYear === "all" (via /api/impact/stats).
+    const filteredSurveys = surveyResponses?.filter((r: any) => {
+      const yr = new Date(r.createdAt + "").getFullYear();
+      return yr === parseInt(selectedYear);
+    });
+    filteredSurveys?.forEach((resp: any) => {
+      if (resp.respondentType !== "participant" || !resp.resourceSelected) return;
+      const mv = { [resp.resourceSelected]: 1 };
+      if (orgGeoContext?.spa)    addToAgg("SPA",    orgGeoContext.spa,    mv);
+      if (orgGeoContext?.city)   addToAgg("City",   orgGeoContext.city,   mv);
+      if (orgGeoContext?.county) addToAgg("County", orgGeoContext.county, mv);
+      if (orgGeoContext?.state)  addToAgg("State",  orgGeoContext.state,  mv);
+    });
+
     return Object.values(aggregation);
-  }, [stats, entries, selectedYear, orgGeoContext]);
+  }, [stats, entries, selectedYear, orgGeoContext, surveyResponses]);
 
   const participantMetricNames = useMemo(() => {
     if (!selectedProgram) return new Set<string>();

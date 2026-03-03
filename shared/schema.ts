@@ -116,6 +116,19 @@ export const censusCache = pgTable("census_cache", {
   fetchedAt: timestamp("fetched_at").defaultNow(),
 });
 
+export const surveyResponses = pgTable("survey_responses", {
+  id:               serial("id").primaryKey(),
+  programId:        integer("program_id").notNull().references(() => programs.id, { onDelete: "cascade" }),
+  respondentType:   text("respondent_type").notNull(),
+  resourceSelected: text("resource_selected"),
+  email:            text("email"),
+  sex:              text("sex"),
+  ageRange:         text("age_range"),
+  familySize:       integer("family_size"),
+  householdIncome:  text("household_income"),
+  createdAt:        timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
@@ -141,6 +154,11 @@ export const programsRelations = relations(programs, ({ one, many }) => ({
   organization: one(organizations, { fields: [programs.orgId], references: [organizations.id] }),
   metrics: many(impactMetrics),
   entries: many(impactEntries),
+  surveyResponses: many(surveyResponses),
+}));
+
+export const surveyResponsesRelations = relations(surveyResponses, ({ one }) => ({
+  program: one(programs, { fields: [surveyResponses.programId], references: [programs.id] }),
 }));
 
 export const impactMetricsRelations = relations(impactMetrics, ({ one }) => ({
@@ -153,6 +171,10 @@ export const impactEntriesRelations = relations(impactEntries, ({ one }) => ({
 }));
 
 // === BASE SCHEMAS ===
+
+export const insertSurveyResponseSchema = createInsertSchema(surveyResponses).omit({ id: true, createdAt: true });
+export type SurveyResponse = typeof surveyResponses.$inferSelect;
+export type InsertSurveyResponse = z.infer<typeof insertSurveyResponseSchema>;
 
 export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const updateOrganizationSchema = insertOrganizationSchema.partial();

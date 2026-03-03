@@ -19,7 +19,7 @@ import {
   AreaChart
 } from "recharts";
 import { format } from "date-fns";
-import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart, Truck, Users, DollarSign, Activity } from "lucide-react";
+import { ArrowLeft, MapPin, Download, Pencil, Calendar, BarChart, Truck, Users, DollarSign, Activity, ClipboardList } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -141,6 +141,13 @@ export default function ProgramDetails() {
                 </SelectContent>
               </Select>
             )}
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/survey/${programId}`, "_blank")}
+            >
+              <ClipboardList className="w-4 h-4 mr-2" />
+              Launch Survey
+            </Button>
             <Link href={`/programs/${programId}/edit`}>
               <Button variant="outline" data-testid="button-edit-program">
                 <Pencil className="w-4 h-4 mr-2" />

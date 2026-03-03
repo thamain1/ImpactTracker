@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
 import Landing from "@/pages/Landing";
+import Survey from "@/pages/Survey";
 import Dashboard from "@/pages/Dashboard";
 import Programs from "@/pages/Programs";
 import ProgramDetails from "@/pages/ProgramDetails";
@@ -58,6 +59,10 @@ function PublicRoute({ component: Component }: { component: React.ComponentType 
 function Router() {
   return (
     <Switch>
+      <Route path="/survey/:programId">
+        <Survey />
+      </Route>
+
       <Route path="/welcome">
         <PublicRoute component={Landing} />
       </Route>
