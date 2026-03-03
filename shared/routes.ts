@@ -474,8 +474,9 @@ export const api = {
       method: "POST" as const,
       path: "/api/program-builder/chat" as const,
       input: z.object({
-        messages: z.array(z.object({ role: z.enum(["user", "assistant"]), content: z.string() })),
-        orgId: z.number(),
+        sessionId: z.string().nullable(),
+        message:   z.string().nullable(),
+        orgId:     z.number(),
       }),
       responses: {
         200: z.unknown(),

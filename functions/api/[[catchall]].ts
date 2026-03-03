@@ -1472,16 +1472,55 @@ app.post("/api/program-builder/chat", async (c) => {
 
     const body = await c.req.json();
     const input = z.object({
-      messages: z.array(z.object({
-        role: z.enum(["user", "assistant"]),
-        content: z.string(),
-      })),
-      orgId: z.number(),
+      sessionId: z.string().uuid().nullable(),
+      message:   z.string().nullable(),
+      orgId:     z.number(),
     }).parse(body);
 
     if (!(await userOwnsOrg(supabase, user.id, input.orgId)))
       return c.json({ message: "Not authorized" }, 403);
 
+    // Fire-and-forget: delete sessions older than 24 hours
+    supabase.from("builder_sessions")
+      .delete()
+      .lt("updated_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+    // Resolve session: fetch existing or create new
+    type BuilderMsg = { role: "user" | "assistant"; content: string };
+    let sessionId: string;
+    let messages: BuilderMsg[];
+
+    if (input.sessionId) {
+      const { data: session, error } = await supabase
+        .from("builder_sessions")
+        .select("id, user_id, org_id, messages")
+        .eq("id", input.sessionId)
+        .maybeSingle();
+
+      if (error || !session) return c.json({ message: "Session not found" }, 404);
+      if (session.user_id !== user.id || session.org_id !== input.orgId)
+        return c.json({ message: "Session does not belong to this user/org" }, 403);
+
+      sessionId = session.id as string;
+      messages  = (session.messages as BuilderMsg[]) ?? [];
+    } else {
+      const { data: newSession, error } = await supabase
+        .from("builder_sessions")
+        .insert({ user_id: user.id, org_id: input.orgId, messages: [] })
+        .select("id")
+        .single();
+
+      if (error || !newSession) return c.json({ message: "Failed to create session" }, 500);
+      sessionId = newSession.id as string;
+      messages  = [];
+    }
+
+    // Append user message if provided
+    if (input.message !== null) {
+      messages = [...messages, { role: "user", content: input.message }];
+    }
+
+    // Fetch org context
     const { data: org } = await supabase
       .from("organizations")
       .select("name, mission")
@@ -1494,8 +1533,21 @@ app.post("/api/program-builder/chat", async (c) => {
       orgMission: org?.mission ?? null,
     };
 
-    const result = await programBuilderChat(apiKey, input.messages, orgContext);
-    return c.json(result);
+    // Call Gemini
+    const result = await programBuilderChat(apiKey, messages, orgContext);
+
+    // Persist updated messages
+    const assistantContent = result.done ? (result.summary ?? "") : (result.question ?? "");
+    const updatedMessages: BuilderMsg[] = result.done
+      ? messages
+      : [...messages, { role: "assistant", content: assistantContent }];
+
+    await supabase
+      .from("builder_sessions")
+      .update({ messages: updatedMessages, updated_at: new Date().toISOString() })
+      .eq("id", sessionId);
+
+    return c.json({ sessionId, ...result });
   } catch (err) {
     if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
     const msg = err instanceof Error ? err.message : "Unknown error";

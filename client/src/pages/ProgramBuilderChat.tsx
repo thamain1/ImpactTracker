@@ -57,6 +57,7 @@ interface FinalProgram {
 export default function ProgramBuilderChat() {
   const [phase, setPhase]               = useState<ChatPhase>("chat");
   const [messages, setMessages]         = useState<BuilderMessage[]>([]);
+  const [sessionId, setSessionId]       = useState<string | null>(null);
   const [currentHint, setCurrentHint]   = useState("");
   const [inputValue, setInputValue]     = useState("");
   const [isLoading, setIsLoading]       = useState(false);
@@ -74,15 +75,17 @@ export default function ProgramBuilderChat() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  const sendToBuilder = useCallback(async (history: BuilderMessage[]) => {
+  const sendToBuilder = useCallback(async (message: string | null) => {
     if (!currentOrgId) return;
     setIsLoading(true);
     try {
       const res  = await apiRequest("POST", "/api/program-builder/chat", {
-        messages: history,
+        sessionId,
+        message,
         orgId: currentOrgId,
       });
       const data = await res.json();
+      setSessionId(data.sessionId);
 
       if (data.done) {
         setFinalProgram(data.program);
@@ -98,21 +101,21 @@ export default function ProgramBuilderChat() {
     } finally {
       setIsLoading(false);
     }
-  }, [currentOrgId, toast]);
+  }, [currentOrgId, sessionId, toast]);
 
   // Boot: fire first question when org is available
   useEffect(() => {
     if (!currentOrgId) return;
-    sendToBuilder([]);
+    sendToBuilder(null);
   }, [currentOrgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSend() {
     if (!inputValue.trim() || isLoading) return;
     const userMsg: BuilderMessage = { role: "user", content: inputValue.trim() };
-    const updated = [...messages, userMsg];
-    setMessages(updated);
+    setMessages(prev => [...prev, userMsg]);
+    const text = inputValue.trim();
     setInputValue("");
-    sendToBuilder(updated);
+    sendToBuilder(text);
   }
 
   async function handleCreate() {
@@ -133,12 +136,13 @@ export default function ProgramBuilderChat() {
   function handleRestart() {
     setPhase("chat");
     setMessages([]);
+    setSessionId(null);   // server creates a fresh session on next call
     setCurrentHint("");
     setInputValue("");
     setFinalProgram(null);
     setFinalSummary("");
     // Re-boot
-    if (currentOrgId) sendToBuilder([]);
+    if (currentOrgId) sendToBuilder(null);
   }
 
   // ── Loading org ──────────────────────────────────────────────────────────────
