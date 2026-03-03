@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { useUserRoles, useAddUserRole, useDeleteUserRole } from "@/hooks/use-user-roles";
@@ -35,6 +36,7 @@ export default function Settings() {
   const org = orgs?.[0];
   const orgId = org?.id;
 
+  const queryClient = useQueryClient();
   const { data: roles, isLoading: rolesLoading } = useUserRoles(orgId || 0);
   const addRole = useAddUserRole(orgId || 0);
   const deleteRole = useDeleteUserRole(orgId || 0);
@@ -170,6 +172,7 @@ export default function Settings() {
     try {
       const url = buildUrl(api.organizations.update.path, { id: orgId });
       await apiRequest("PUT", url, orgForm);
+      await queryClient.invalidateQueries({ queryKey: [api.organizations.list.path] });
       toast({ title: "Saved", description: "Organization profile updated." });
     } catch {
       toast({ title: "Error", description: "Failed to save profile.", variant: "destructive" });
