@@ -183,7 +183,6 @@ export default function Dashboard() {
         const cityItems  = censusComparison.filter((c: CensusComparisonWithImpact) => c.geographyLevel === "City");
         const countyItem = censusComparison.find((c: CensusComparisonWithImpact) => c.geographyLevel === "County") ?? null;
         const stateItem  = censusComparison.find((c: CensusComparisonWithImpact) => c.geographyLevel === "State") ?? null;
-        const spaItems   = censusComparison.filter((c: CensusComparisonWithImpact) => c.geographyLevel === "SPA");
         const primaryCity = cityItems.reduce<CensusComparisonWithImpact | null>(
           (best, cur) => (!best || (cur.totalPopulation ?? 0) > (best.totalPopulation ?? 0)) ? cur : best,
           null
@@ -258,17 +257,6 @@ export default function Dashboard() {
             <div className="grid sm:grid-cols-3 gap-4">
               {topCards.map(item => <CensusCard key={`${item.geographyLevel}:${item.geographyValue}`} item={item} />)}
             </div>
-            {/* Bottom row — SPA breakdown */}
-            {spaItems.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
-                  Service Planning Areas
-                </p>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {spaItems.map(item => <CensusCard key={`${item.geographyLevel}:${item.geographyValue}`} item={item} />)}
-                </div>
-              </div>
-            )}
           </div>
         );
       })()}
