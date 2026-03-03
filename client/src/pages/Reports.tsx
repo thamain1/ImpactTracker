@@ -186,11 +186,10 @@ export default function Reports() {
     return Array.from(unique.values());
   }, [filteredStats]);
 
-  // Normalised list for census lookups: no SPAs, CDPs collapsed to major city
+  // Normalised list for census lookups: CDPs collapsed to major city, SPAs kept
   const censusGeoList = useMemo(() => {
     const unique = new Map<string, { level: string; value: string }>();
     geoList.forEach(g => {
-      if (g.level === "SPA") return;
       const canonical = g.level === "City"
         ? (CITY_CANONICAL_MAP[g.value.toLowerCase()] ?? g.value)
         : g.value;
