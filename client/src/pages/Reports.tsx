@@ -186,7 +186,9 @@ export default function Reports() {
     return Array.from(unique.values());
   }, [filteredStats]);
 
-  // Normalised list for census lookups: CDPs collapsed to major city, SPAs kept
+  // Normalised list for census lookups: CDPs collapsed to major city, SPAs kept.
+  // When only SPAs are present (no direct City/County/State entries), also add
+  // LA/LA County/California so synthetic top-3 cards get population data.
   const censusGeoList = useMemo(() => {
     const unique = new Map<string, { level: string; value: string }>();
     geoList.forEach(g => {
@@ -195,6 +197,14 @@ export default function Reports() {
         : g.value;
       unique.set(`${g.level}:${canonical}`, { level: g.level, value: canonical });
     });
+    const vals = Array.from(unique.values());
+    const hasSpa    = vals.some(g => g.level === "SPA");
+    const hasCity   = vals.some(g => g.level === "City");
+    const hasCounty = vals.some(g => g.level === "County");
+    const hasState  = vals.some(g => g.level === "State");
+    if (hasSpa && !hasCity)   unique.set("City:Los Angeles",          { level: "City",   value: "Los Angeles" });
+    if (hasSpa && !hasCounty) unique.set("County:Los Angeles County", { level: "County", value: "Los Angeles County" });
+    if (hasSpa && !hasState)  unique.set("State:California",          { level: "State",  value: "California" });
     return Array.from(unique.values());
   }, [geoList]);
 
@@ -655,7 +665,26 @@ export default function Reports() {
 
             const countyEntries = filteredStats.filter(s => s.geographyLevel === "County");
             const stateEntries  = filteredStats.filter(s => s.geographyLevel === "State");
-            const topCards = [primaryCity, countyEntries[0] ?? null, stateEntries[0] ?? null].filter(Boolean) as typeof cityEntries;
+
+            // Always show City · County · State — synthesize from program total when absent
+            const makeSyntheticMetrics = () => {
+              const m: Record<string, number> = {};
+              participantMetricNames.forEach(name => {
+                m[name] = (entries || []).reduce(
+                  (sum: number, e: any) => sum + Number((e.metricValues as any)[name] || 0), 0
+                );
+              });
+              return m;
+            };
+            const hasSpaEntries = filteredStats.some(s => s.geographyLevel === "SPA");
+            const knownCounty   = countyEntries[0]?.geographyValue ?? (hasSpaEntries ? "Los Angeles County" : "Los Angeles County");
+            const knownState    = stateEntries[0]?.geographyValue  ?? "California";
+            const knownCity     = primaryCity?.geographyValue       ?? (knownCounty === "Los Angeles County" ? "Los Angeles" : "Los Angeles");
+            const synMetrics    = makeSyntheticMetrics();
+            const effectiveCity   = primaryCity      ?? { geographyLevel: "City",   geographyValue: knownCity,   metrics: synMetrics };
+            const effectiveCounty = countyEntries[0] ?? { geographyLevel: "County", geographyValue: knownCounty, metrics: synMetrics };
+            const effectiveState  = stateEntries[0]  ?? { geographyLevel: "State",  geographyValue: knownState,  metrics: synMetrics };
+            const topCards = [effectiveCity, effectiveCounty, effectiveState];
 
             return (
               <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
