@@ -5,6 +5,7 @@ import { useSurveyResponses } from "@/hooks/use-survey";
 import { AddImpactDialog } from "@/components/AddImpactDialog";
 import { EditImpactDialog } from "@/components/EditImpactDialog";
 import { ImportCsvDialog } from "@/components/ImportCsvDialog";
+import { EditSurveyResponseDialog } from "@/components/EditSurveyResponseDialog";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -28,16 +29,20 @@ import { api } from "@shared/routes";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/use-auth";
 import { useOrganizations } from "@/hooks/use-organizations";
+import { usePrograms } from "@/hooks/use-programs";
 
 export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
   const programId = parseInt(params?.id || "0");
   const [editingEntry, setEditingEntry] = useState<ImpactEntry | null>(null);
+  const [editingSurveyResponse, setEditingSurveyResponse] = useState<any | null>(null);
   const [selectedYear, setSelectedYear] = useState<string>("all");
 
   const { user } = useAuth();
   const { data: orgs } = useOrganizations();
   const { data: program, isLoading: progLoading } = useProgram(programId);
+  const orgId = (orgs?.[0] as any)?.id;
+  const { data: orgPrograms } = usePrograms(orgId);
   // Program zip takes priority; fall back to org zip
   const effectiveZip = (program as any)?.zipCode || (orgs?.[0] as any)?.addressZip || undefined;
   const { data: stats, isLoading: statsLoading } = useImpactStats(programId);
@@ -515,6 +520,72 @@ export default function ProgramDetails() {
         </div>
       </div>
 
+      {/* Survey Responses Table */}
+      {surveyResponses && surveyResponses.length > 0 && (
+        <Card className="border-slate-200 shadow-sm">
+          <CardHeader>
+            <CardTitle className="font-heading text-lg flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-teal-600" />
+              Survey Responses
+              <Badge className="bg-teal-100 text-teal-700 border-teal-200 font-normal ml-1">
+                {surveyResponses.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="text-left font-medium text-slate-500 pb-3 pl-2">Date / Time</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Type</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Sex</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Age</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Family</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Income</th>
+                    <th className="text-left font-medium text-slate-500 pb-3">Email</th>
+                    <th className="pb-3 w-10" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {surveyResponses.map((r: any) => (
+                    <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
+                      <td className="py-2.5 pl-2 text-slate-500 text-xs whitespace-nowrap">
+                        {format(new Date(r.createdAt), "MMM d, yyyy h:mm a")}
+                      </td>
+                      <td className="py-2.5">
+                        <Badge
+                          className={r.respondentType === "participant"
+                            ? "bg-teal-100 text-teal-700 border-teal-200 font-normal text-xs"
+                            : "bg-slate-100 text-slate-600 border-slate-200 font-normal text-xs"}
+                        >
+                          {r.respondentType}
+                        </Badge>
+                      </td>
+                      <td className="py-2.5 text-slate-600 capitalize">{r.sex?.replace(/-/g, " ") || "—"}</td>
+                      <td className="py-2.5 text-slate-600">{r.ageRange || "—"}</td>
+                      <td className="py-2.5 text-slate-600">{r.familySize ?? "—"}</td>
+                      <td className="py-2.5 text-slate-600">{r.householdIncome || "—"}</td>
+                      <td className="py-2.5 text-slate-500 text-xs">{r.email || "—"}</td>
+                      <td className="py-2.5 pr-2">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => setEditingSurveyResponse(r)}
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {program && editingEntry && (
         <EditImpactDialog
           program={program}
@@ -523,6 +594,14 @@ export default function ProgramDetails() {
           onOpenChange={(open) => { if (!open) setEditingEntry(null); }}
         />
       )}
+
+      <EditSurveyResponseDialog
+        response={editingSurveyResponse}
+        open={!!editingSurveyResponse}
+        onOpenChange={(open) => { if (!open) setEditingSurveyResponse(null); }}
+        orgPrograms={(orgPrograms || []).map((p: any) => ({ id: p.id, name: p.name }))}
+        programId={programId}
+      />
     </div>
   );
 }

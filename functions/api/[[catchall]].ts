@@ -1272,8 +1272,67 @@ app.get("/api/survey-responses", async (c) => {
   if (isNaN(programId)) return c.json([], 200);
   if (!(await userOwnsProgram(supabase, user.id, programId))) return c.json([], 200);
   const { data } = await supabase
-    .from("survey_responses").select("*").eq("program_id", programId);
+    .from("survey_responses").select("*").eq("program_id", programId).order("created_at", { ascending: false });
   return c.json((data || []).map((r: any) => toCamel(r)));
+});
+
+const surveyUpdateSchema = z.object({
+  respondentType:  z.enum(["participant", "supporter"]).optional(),
+  programId:       z.number().optional(),
+  email:           z.string().email().optional().or(z.literal("")).nullable(),
+  sex:             z.string().optional().nullable(),
+  ageRange:        z.string().optional().nullable(),
+  familySize:      z.number().int().min(1).max(20).optional().nullable(),
+  householdIncome: z.string().optional().nullable(),
+});
+
+app.put("/api/survey-responses/:id", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const id = Number(c.req.param("id"));
+  if (isNaN(id)) return c.json({ message: "Invalid id" }, 400);
+
+  const { data: existing } = await supabase
+    .from("survey_responses").select("program_id").eq("id", id).maybeSingle();
+  if (!existing) return c.json({ message: "Not found" }, 404);
+  if (!(await userOwnsProgram(supabase, user.id, existing.program_id)))
+    return c.json({ message: "Not authorized" }, 403);
+
+  try {
+    const body = await c.req.json();
+    const input = surveyUpdateSchema.parse(body);
+    const { error } = await supabase.from("survey_responses").update({
+      ...(input.respondentType  !== undefined && { respondent_type:  input.respondentType }),
+      ...(input.programId       !== undefined && { program_id:       input.programId }),
+      ...(input.email           !== undefined && { email:            input.email || null }),
+      ...(input.sex             !== undefined && { sex:              input.sex }),
+      ...(input.ageRange        !== undefined && { age_range:        input.ageRange }),
+      ...(input.familySize      !== undefined && { family_size:      input.familySize }),
+      ...(input.householdIncome !== undefined && { household_income: input.householdIncome }),
+    }).eq("id", id);
+    if (error) throw error;
+    const { data: updated } = await supabase.from("survey_responses").select("*").eq("id", id).maybeSingle();
+    return c.json(toCamel(updated));
+  } catch (err) {
+    if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);
+    throw err;
+  }
+});
+
+app.delete("/api/survey-responses/:id", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const id = Number(c.req.param("id"));
+  if (isNaN(id)) return c.json({ message: "Invalid id" }, 400);
+
+  const { data: existing } = await supabase
+    .from("survey_responses").select("program_id").eq("id", id).maybeSingle();
+  if (!existing) return c.json({ message: "Not found" }, 404);
+  if (!(await userOwnsProgram(supabase, user.id, existing.program_id)))
+    return c.json({ message: "Not authorized" }, 403);
+
+  await supabase.from("survey_responses").delete().eq("id", id);
+  return c.body(null, 204);
 });
 
 // ─── Error handler ────────────────────────────────────────────────────────────
