@@ -164,8 +164,11 @@ export default function Reports() {
         if (ctx.county) addToAgg("County", ctx.county, mv);
         if (ctx.state)  addToAgg("State",  ctx.state,  mv);
       } else {
-        // No zip resolution — count only at the manually selected level
+        // No zip — add at recorded level and roll up to parent geographies
         addToAgg(entry.geographyLevel, entry.geographyValue, mv);
+        getParentGeographies(entry.geographyLevel, entry.geographyValue).forEach(parent => {
+          addToAgg(parent.level, parent.value, mv);
+        });
       }
     });
     return Object.values(aggregation);

@@ -670,7 +670,11 @@ app.get("/api/impact/stats", async (c) => {
       if (ctx.county) addToAggregation("County", ctx.county, metrics);
       if (ctx.state)  addToAggregation("State",  ctx.state,  metrics);
     } else {
+      // No zip — add at recorded level and roll up to parent geographies
       addToAggregation(entry.geographyLevel, entry.geographyValue, metrics);
+      getParentGeographies(entry.geographyLevel, entry.geographyValue).forEach(parent => {
+        addToAggregation(parent.level, parent.value, metrics);
+      });
     }
   });
 
