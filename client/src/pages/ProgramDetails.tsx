@@ -384,14 +384,25 @@ export default function ProgramDetails() {
           <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0).map((m: any) => {
-              const maxUnits = Math.floor((program as any).budget / m.unitCost);
+              const budget   = (program as any).budget as number;
+              const maxUnits = Math.floor(budget / m.unitCost);
+              const goalsText: string | null = (program as any).goals ?? null;
+              const goalMatch = goalsText?.match(/(\d[\d,]*)/);
+              const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
+              const shortfall = goalTarget != null && maxUnits < goalTarget ? goalTarget - maxUnits : null;
+              const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
               return (
-                <Card key={m.id} className="p-4">
-                  <p className="text-sm font-medium">{m.name}</p>
-                  <p className="text-2xl font-bold mt-1">{maxUnits.toLocaleString()}</p>
+                <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
+                  <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
+                  <p className={`text-2xl font-bold mt-1${shortfall != null ? " text-red-700" : ""}`}>{maxUnits.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">
-                    max units at ${m.unitCost}/unit from ${((program as any).budget as number).toLocaleString()} budget
+                    max units at ${m.unitCost}/unit from ${budget.toLocaleString()} budget
                   </p>
+                  {shortfall != null && (
+                    <p className="text-xs text-red-600 font-medium mt-2">
+                      {shortfall.toLocaleString()} units short of goal · ${dollarShortfall!.toLocaleString()} needed
+                    </p>
+                  )}
                 </Card>
               );
             })}
