@@ -82,7 +82,7 @@ export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
       "pct_housing_secured", "pct_grade_improvement", "pct_recidivism_reduction",
     ];
     const exampleRow = [
-      "2026-01-15", "90003", "", "",
+      "01/15/2026", "90003", "", "",
       ...metricNames.map(() => "0"),
       "", "", "", "", "", "", "",
     ];
@@ -113,8 +113,15 @@ export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
       }
 
       const parsed: ParsedRow[] = rows.map(row => {
+        // Accept MM/DD/YYYY and convert to YYYY-MM-DD for the API
+        const rawDate = (row.date || "").trim();
+        const mmddyyyy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(rawDate);
+        if (mmddyyyy) {
+          const [, mm, dd, yyyy] = mmddyyyy;
+          row = { ...row, date: `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}` };
+        }
         if (!row.date || !/^\d{4}-\d{2}-\d{2}$/.test(row.date.trim()))
-          return { raw: row, valid: false, reason: "Invalid/missing date (YYYY-MM-DD)" };
+          return { raw: row, valid: false, reason: "Invalid/missing date (use MM/DD/YYYY)" };
 
         const hasZip = /^\d{5}$/.test((row.zip_code || "").replace(/\D/g, ""));
         const hasManualGeo = row.geography_level?.trim() && row.geography_value?.trim();
@@ -264,7 +271,7 @@ export function ImportCsvDialog({ program }: ImportCsvDialogProps) {
             <div className="text-xs text-muted-foreground space-y-1 border-t pt-3">
               <p className="font-medium text-slate-600">Column guide:</p>
               <ul className="space-y-0.5 ml-3 list-disc">
-                <li><span className="font-mono">date</span> — required, YYYY-MM-DD format</li>
+                <li><span className="font-mono">date</span> — required, MM/DD/YYYY format</li>
                 <li><span className="font-mono">zip_code</span> — 5-digit zip (auto-resolves SPA/city/county)</li>
                 <li><span className="font-mono">geography_level + geography_value</span> — used if no zip provided</li>
                 <li><span className="font-mono">{metricNames.join(", ")}</span> — numeric metric values</li>
