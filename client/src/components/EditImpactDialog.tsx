@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { insertImpactEntrySchema } from "@shared/schema";
-import { useUpdateImpactEntry } from "@/hooks/use-impact";
+import { useUpdateImpactEntry, useDeleteImpactEntry } from "@/hooks/use-impact";
 import { apiRequest } from "@/lib/queryClient";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Loader2, MapPin, CheckCircle2 } from "lucide-react";
+import { Loader2, MapPin, CheckCircle2, Trash2 } from "lucide-react";
 import type { ProgramResponse } from "@shared/routes";
 import type { ImpactEntry } from "@shared/schema";
 
@@ -48,6 +48,7 @@ const formSchema = insertImpactEntrySchema.extend({
 
 export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImpactDialogProps) {
   const updateImpact = useUpdateImpactEntry();
+  const deleteImpact = useDeleteImpactEntry();
   const mv = entry.metricValues as Record<string, number>;
   const [metricInputs, setMetricInputs] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -419,20 +420,43 @@ export function EditImpactDialog({ program, entry, open, onOpenChange }: EditImp
               </div>
             </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateImpact.isPending} data-testid="button-save-edit">
-                {updateImpact.isPending ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Saving...
-                  </>
+            <div className="flex justify-between gap-3 pt-4">
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={deleteImpact.isPending}
+                onClick={() => {
+                  if (confirm("Delete this entry? This cannot be undone.")) {
+                    deleteImpact.mutate(
+                      { id: entry.id, programId: program.id },
+                      { onSuccess: () => onOpenChange(false) }
+                    );
+                  }
+                }}
+                data-testid="button-delete-entry"
+              >
+                {deleteImpact.isPending ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  "Save Changes"
+                  <><Trash2 className="w-4 h-4 mr-1.5" />Delete</>
                 )}
               </Button>
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-edit">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateImpact.isPending} data-testid="button-save-edit">
+                  {updateImpact.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save Changes"
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
         </Form>

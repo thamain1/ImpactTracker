@@ -54,6 +54,35 @@ export function useUpdateImpactEntry() {
   });
 }
 
+export function useDeleteImpactEntry() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ id, programId }: { id: number; programId: number }) => {
+      const res = await apiRequest("DELETE", `/api/impact/${id}`);
+      if (!res.ok) throw new Error("Failed to delete entry");
+      return { id, programId };
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: [api.impact.list.path, variables.programId] });
+      queryClient.invalidateQueries({ queryKey: [api.impact.stats.path, variables.programId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/charts"] });
+      toast({
+        title: "Entry Deleted",
+        description: "The impact entry has been removed.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
 export function useCreateImpactEntry() {
   const queryClient = useQueryClient();
   const { toast } = useToast();

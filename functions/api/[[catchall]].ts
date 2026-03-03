@@ -615,6 +615,29 @@ app.put("/api/impact/:id", async (c) => {
   }
 });
 
+app.delete("/api/impact/:id", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const id = Number(c.req.param("id"));
+
+  const { data: existing } = await supabase
+    .from("impact_entries").select("*").eq("id", id).maybeSingle();
+  if (!existing) return c.json({ message: "Impact entry not found" }, 404);
+
+  if (existing.user_id !== user.id) {
+    const { data: progRow } = await supabase.from("programs").select("org_id").eq("id", existing.program_id).maybeSingle();
+    if (!progRow) return c.json({ message: "Program not found" }, 404);
+    const { data: roleRow } = await supabase
+      .from("user_roles").select("role").eq("org_id", progRow.org_id).eq("user_id", user.id).maybeSingle();
+    if (!roleRow || !["admin", "can_edit"].includes(roleRow.role)) {
+      return c.json({ message: "Not authorized to delete this entry" }, 403);
+    }
+  }
+
+  await supabase.from("impact_entries").delete().eq("id", id);
+  return c.json({ success: true });
+});
+
 // ─── Impact Stats ─────────────────────────────────────────────────────────────
 
 app.get("/api/impact/stats", async (c) => {
