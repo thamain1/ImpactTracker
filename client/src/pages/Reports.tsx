@@ -123,13 +123,19 @@ export default function Reports() {
   // stored geoContext can still be assigned to the correct SPA.
   const [orgGeoContext, setOrgGeoContext] = useState<{ spa?: string; city?: string; county?: string; state?: string } | null>(null);
   useEffect(() => {
-    const zip = ((selectedProgram as any)?.zipCode || (orgs?.[0] as any)?.addressZip || "").replace(/\D/g, "");
+    const rawOrg = orgs?.[0] as any;
+    const zip = (
+      (selectedProgram as any)?.zipCode ||
+      rawOrg?.addressZip ||
+      rawOrg?.address?.match(/\b(\d{5})\b/)?.[1] ||
+      ""
+    ).replace(/\D/g, "");
     if (zip.length !== 5) { setOrgGeoContext(null); return; }
     apiRequest("GET", `/api/zipcode/${zip}`)
       .then(r => r.ok ? r.json() : null)
       .then(ctx => setOrgGeoContext(ctx))
       .catch(() => setOrgGeoContext(null));
-  }, [selectedProgram?.id, (orgs?.[0] as any)?.addressZip]);
+  }, [selectedProgram?.id, (orgs?.[0] as any)?.addressZip, (orgs?.[0] as any)?.address]);
 
   const availableYears = useMemo(() => {
     if (!allEntries) return [];

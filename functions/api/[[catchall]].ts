@@ -662,8 +662,10 @@ app.get("/api/impact/stats", async (c) => {
   let fallbackSpa: string | null = null;
   const { data: progRow } = await supabase.from("programs").select("zip_code, org_id").eq("id", programId).maybeSingle();
   if (progRow) {
-    const { data: orgRow } = await supabase.from("organizations").select("address_zip").eq("id", progRow.org_id).maybeSingle();
-    const effectiveZip = (progRow.zip_code || orgRow?.address_zip || "").replace(/\D/g, "");
+    const { data: orgRow } = await supabase.from("organizations").select("address_zip, address").eq("id", progRow.org_id).maybeSingle();
+    // Try dedicated zip fields first, then fall back to extracting a 5-digit zip from the legacy address string.
+    const rawZip = progRow.zip_code || orgRow?.address_zip || orgRow?.address?.match(/\b(\d{5})\b/)?.[1] || "";
+    const effectiveZip = rawZip.replace(/\D/g, "");
     if (effectiveZip.length === 5) {
       const resolved = await resolveZipCode(effectiveZip);
       fallbackSpa = (resolved as any)?.spa ?? null;
