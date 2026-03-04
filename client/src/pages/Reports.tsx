@@ -373,6 +373,45 @@ export default function Reports() {
     return entryTotal + surveyTotal;
   }, [entries, participantMetricNames, surveyResponses, participantMetricIds]);
 
+  // Survey check-ins for the Raw Data tab — one row per unique check-in (grouped by createdAt),
+  // with all metric quantities aggregated and demographics captured from the first row.
+  const surveyCheckIns = useMemo(() => {
+    if (!surveyResponses || !selectedProgram) return [];
+    const metricIdToName: Record<number, string> = {};
+    selectedProgram.metrics.forEach((m: any) => { metricIdToName[m.id] = m.name; });
+    const primaryMetricName =
+      selectedProgram.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ||
+      selectedProgram.metrics[0]?.name || "";
+
+    const participantRows = (surveyResponses as any[]).filter((r: any) => r.respondentType === "participant");
+    const yearFiltered = selectedYear === "all" ? participantRows : participantRows.filter((r: any) =>
+      new Date(r.createdAt + 'Z').getFullYear() === parseInt(selectedYear)
+    );
+
+    const groups = new Map<string, { metricValues: Record<string, number>; date: string; demographics: string }>();
+    yearFiltered.forEach((r: any) => {
+      const key = r.createdAt as string;
+      if (!groups.has(key)) {
+        const _d = new Date(r.createdAt + 'Z');
+        const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+        const demoParts: string[] = [];
+        if (r.sex) demoParts.push(r.sex);
+        if (r.ageRange) demoParts.push(r.ageRange);
+        if (r.householdIncome) demoParts.push(r.householdIncome);
+        if (r.familySize) demoParts.push(`Fam: ${r.familySize}`);
+        groups.set(key, { metricValues: {}, date, demographics: demoParts.join(", ") || "-" });
+      }
+      const group = groups.get(key)!;
+      if (r.metricId && metricIdToName[r.metricId]) {
+        const name = metricIdToName[r.metricId];
+        group.metricValues[name] = (group.metricValues[name] || 0) + (r.quantityDelivered ?? 1);
+      } else if (!r.metricId && primaryMetricName) {
+        group.metricValues[primaryMetricName] = (group.metricValues[primaryMetricName] || 0) + 1;
+      }
+    });
+    return Array.from(groups.values()).sort((a, b) => b.date.localeCompare(a.date));
+  }, [surveyResponses, selectedProgram, selectedYear]);
+
   const handleCsvDownload = async () => {
     const res = await apiRequest("GET", `${api.impact.exportCsv.path}?programId=${programId}`);
     if (!res.ok) return;
@@ -1340,28 +1379,57 @@ export default function Reports() {
                   </tr>
                 </thead>
                 <tbody>
-                  {entries?.map((entry) => {
-                    const mv = entry.metricValues as Record<string, number>;
-                    return (
-                      <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/50">
-                        <td className="p-3">{format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}</td>
-                        <td className="p-3">
-                          <Badge variant="outline" className="text-xs">{entry.geographyLevel}</Badge>
-                        </td>
-                        <td className="p-3 font-medium">{entry.geographyValue}</td>
-                        <td className="p-3 text-muted-foreground">{entry.zipCode || "-"}</td>
-                        {selectedProgram?.metrics.map(m => (
-                          <td key={m.id} className="p-3 text-right font-medium">{(mv[m.name] || 0).toLocaleString()}</td>
-                        ))}
-                        <td className="p-3 text-muted-foreground text-xs max-w-[200px] truncate">{entry.demographics || "-"}</td>
-                      </tr>
+                  {(() => {
+                    type EntryRow  = { kind: "entry";  entry: NonNullable<typeof entries>[number] };
+                    type SurveyRow = { kind: "survey"; checkIn: typeof surveyCheckIns[number] };
+                    const merged: (EntryRow | SurveyRow)[] = [
+                      ...(entries || []).map(e  => ({ kind: "entry"  as const, entry: e })),
+                      ...surveyCheckIns.map(ci  => ({ kind: "survey" as const, checkIn: ci })),
+                    ];
+                    merged.sort((a, b) => {
+                      const da = a.kind === "entry" ? a.entry.date : a.checkIn.date;
+                      const db = b.kind === "entry" ? b.entry.date : b.checkIn.date;
+                      return db.localeCompare(da);
+                    });
+                    if (merged.length === 0) return (
+                      <tr><td colSpan={99} className="p-8 text-center text-muted-foreground">No data recorded yet</td></tr>
                     );
-                  })}
-                  {(!entries || entries.length === 0) && (
-                    <tr>
-                      <td colSpan={99} className="p-8 text-center text-muted-foreground">No data recorded yet</td>
-                    </tr>
-                  )}
+                    return merged.map((row, idx) => {
+                      if (row.kind === "survey") {
+                        const ci = row.checkIn;
+                        return (
+                          <tr key={`survey-${idx}`} className="border-b last:border-0 bg-teal-50/40">
+                            <td className="p-3">{format(new Date(ci.date + 'T00:00:00'), 'MMM d, yyyy')}</td>
+                            <td className="p-3">
+                              <Badge className="bg-teal-100 text-teal-700 border-teal-200 font-normal text-xs">Survey</Badge>
+                            </td>
+                            <td className="p-3 font-medium text-slate-700">Kiosk Check-in</td>
+                            <td className="p-3 text-muted-foreground">-</td>
+                            {selectedProgram?.metrics.map(m => (
+                              <td key={m.id} className="p-3 text-right font-medium">{(ci.metricValues[m.name] || 0).toLocaleString()}</td>
+                            ))}
+                            <td className="p-3 text-muted-foreground text-xs max-w-[200px] truncate">{ci.demographics}</td>
+                          </tr>
+                        );
+                      }
+                      const entry = row.entry;
+                      const mv = entry.metricValues as Record<string, number>;
+                      return (
+                        <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <td className="p-3">{format(new Date(entry.date + 'T00:00:00'), 'MMM d, yyyy')}</td>
+                          <td className="p-3">
+                            <Badge variant="outline" className="text-xs">{entry.geographyLevel}</Badge>
+                          </td>
+                          <td className="p-3 font-medium">{entry.geographyValue}</td>
+                          <td className="p-3 text-muted-foreground">{entry.zipCode || "-"}</td>
+                          {selectedProgram?.metrics.map(m => (
+                            <td key={m.id} className="p-3 text-right font-medium">{(mv[m.name] || 0).toLocaleString()}</td>
+                          ))}
+                          <td className="p-3 text-muted-foreground text-xs max-w-[200px] truncate">{entry.demographics || "-"}</td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>
