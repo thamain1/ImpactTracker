@@ -80,6 +80,8 @@ interface ReportData {
   ageGroupData: AgeGroupEntry[];
   entries: ImpactEntry[];
   aiNarrative?: AiNarrative | null;
+  totalParticipants?: number;
+  metricTotals?: Record<string, number>;
 }
 
 const COLORS = {
@@ -131,20 +133,28 @@ export function generateImpactStudyPdf(data: ReportData) {
   );
   const primaryMetric = Array.from(participantMetricSet).join(", ") || "Participants";
 
-  const totalPrimary = entries.reduce((sum, e) => {
+  let totalPrimary = entries.reduce((sum, e) => {
     const mv = e.metricValues as Record<string, number>;
     let t = 0;
     participantMetricSet.forEach(name => { t += Number(mv[name] || 0); });
     return sum + t;
   }, 0);
+  // Use survey-inclusive total when provided by caller
+  if (data.totalParticipants != null) totalPrimary = data.totalParticipants;
 
-  const secondaryMetrics: Record<string, number> = {};
+  let secondaryMetrics: Record<string, number> = {};
   program.metrics.filter(m => !participantMetricSet.has(m.name)).forEach(m => {
     secondaryMetrics[m.name] = entries.reduce((sum, e) => {
       const mv = e.metricValues as Record<string, number>;
       return sum + Number(mv[m.name] || 0);
     }, 0);
   });
+  // Override secondary metrics with survey-inclusive totals when provided
+  if (data.metricTotals) {
+    program.metrics.filter(m => !participantMetricSet.has(m.name)).forEach(m => {
+      if (data.metricTotals![m.name] != null) secondaryMetrics[m.name] = data.metricTotals![m.name];
+    });
+  }
 
   let goalTarget: number | null = null;
   if (program.goals) {

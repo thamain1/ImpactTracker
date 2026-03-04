@@ -531,6 +531,8 @@ export default function Reports() {
         ageGroupData: (ageGroupData || []) as any,
         entries: (entries || []) as any,
         aiNarrative,
+        totalParticipants: goalData?.actual,
+        metricTotals,
       });
       const personaLabel = PERSONA_LABELS[persona];
       toast({ title: "PDF Generated", description: aiNarrative ? `${personaLabel} Impact Study PDF with AI narrative downloaded.` : "Impact Study PDF downloaded." });
