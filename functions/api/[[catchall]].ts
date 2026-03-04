@@ -825,12 +825,58 @@ app.get("/api/impact/export", async (c) => {
     .from("impact_entries").select("*").eq("program_id", programId).order("created_at", { ascending: false });
   const entries = (entryRows || []).map((e: any) => toCamel(e));
   const metricNames = (prog as any).metrics.map((m: any) => m.name);
-  const header = ["Date", "Geography Level", "Geography Value", "ZIP Code", "Demographics", "Outcomes", ...metricNames].join(",");
+  const header = ["Date", "Source", "Geography Level", "Geography Value", "ZIP Code", "Demographics", "Outcomes", ...metricNames].join(",");
   const rows = entries.map((entry: any) => {
     const mv = entry.metricValues as Record<string, number>;
     const metricCols = metricNames.map((n: string) => mv[n] || 0);
-    return [entry.date, entry.geographyLevel, `"${entry.geographyValue}"`, entry.zipCode || "", `"${entry.demographics || ""}"`, `"${entry.outcomes || ""}"`, ...metricCols].join(",");
+    return [entry.date, "Manual", entry.geographyLevel, `"${entry.geographyValue}"`, entry.zipCode || "", `"${entry.demographics || ""}"`, `"${entry.outcomes || ""}"`, ...metricCols].join(",");
   });
+
+  // Append survey_responses as individual check-in rows
+  const { data: surveyRows } = await supabase
+    .from("survey_responses")
+    .select("metric_id, quantity_delivered, created_at")
+    .eq("program_id", programId)
+    .eq("respondent_type", "participant")
+    .order("created_at", { ascending: false });
+
+  if (surveyRows && surveyRows.length > 0) {
+    // Build metric_id → name lookup
+    const metricIdToName: Record<number, string> = {};
+    (prog as any).metrics.forEach((m: any) => { metricIdToName[m.id] = m.name; });
+    const primaryMetricName: string =
+      (prog as any).metrics.find((m: any) => m.countsAsParticipant !== false)?.name ||
+      (prog as any).metrics[0]?.name || "";
+
+    // Group rows by created_at timestamp (same timestamp = same check-in)
+    const checkIns = new Map<string, Record<string, number>>();
+    surveyRows.forEach((row: any) => {
+      const key = row.created_at as string;
+      if (!checkIns.has(key)) checkIns.set(key, {});
+      const mv = checkIns.get(key)!;
+      if (row.metric_id && metricIdToName[row.metric_id]) {
+        const name = metricIdToName[row.metric_id];
+        mv[name] = (mv[name] || 0) + (row.quantity_delivered ?? 1);
+      } else if (!row.metric_id && primaryMetricName) {
+        // Legacy row without metric_id — count 1 for the primary participant metric
+        mv[primaryMetricName] = (mv[primaryMetricName] || 0) + 1;
+      }
+    });
+
+    checkIns.forEach((mv, createdAt) => {
+      const date = (createdAt as string).split("T")[0];
+      const metricCols = metricNames.map((n: string) => mv[n] || 0);
+      rows.push([date, "Survey", "Survey", '"Kiosk Check-in"', "", '""', '""', ...metricCols].join(","));
+    });
+  }
+
+  // Sort all rows by date descending
+  rows.sort((a, b) => {
+    const da = (a.split(",")[0] || "").replace(/"/g, "");
+    const db = (b.split(",")[0] || "").replace(/"/g, "");
+    return db.localeCompare(da);
+  });
+
   const csv = [header, ...rows].join("\n");
   const fileName = (prog as any).name.replace(/\s+/g, "_");
   return new Response(csv, {

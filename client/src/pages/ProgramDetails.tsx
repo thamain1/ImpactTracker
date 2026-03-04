@@ -151,6 +151,24 @@ export default function ProgramDetails() {
     return groups;
   }, [yearFilteredSurveys, participantMetricIds]);
 
+  // Non-participant metric quantities from surveys grouped by local date, e.g. Diaper Kits.
+  // Used to display these alongside the participant count in the Recent Entries survey rows.
+  const surveyResourcesByDate = useMemo(() => {
+    const groups: Record<string, Record<string, number>> = {};
+    yearFilteredSurveys.forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      if (r.metricId == null) return;
+      if (participantMetricIds.has(r.metricId)) return; // skip participant metrics
+      const metric = program?.metrics.find((m: any) => m.id === r.metricId);
+      if (!metric) return;
+      const _d = new Date(r.createdAt + 'Z');
+      const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+      if (!groups[date]) groups[date] = {};
+      groups[date][metric.name] = (groups[date][metric.name] || 0) + (r.quantityDelivered ?? 1);
+    });
+    return groups;
+  }, [yearFilteredSurveys, participantMetricIds, program]);
+
   // Total participants served: 1 per kiosk check-in + manual entry participant metric values.
   // Count only rows for countsAsParticipant metrics to avoid double-counting when a single
   // check-in creates multiple survey_responses rows (one per metric allocation).
@@ -506,9 +524,16 @@ export default function ProgramDetails() {
                                 </div>
                               </td>
                               <td className="py-3 text-right">
-                                <span className="text-xs text-slate-600">
-                                  <span className="font-bold text-slate-900">{row.count.toLocaleString()}</span> {primaryMetricName || "Participants"}
-                                </span>
+                                <div className="flex flex-col items-end gap-0.5">
+                                  <span className="text-xs text-slate-600">
+                                    <span className="font-bold text-slate-900">{row.count.toLocaleString()}</span> {primaryMetricName || "Participants"}
+                                  </span>
+                                  {surveyResourcesByDate[row.date] && Object.entries(surveyResourcesByDate[row.date]).map(([name, qty]) => (
+                                    <span key={name} className="text-xs text-slate-600">
+                                      <span className="font-bold text-slate-900">{qty.toLocaleString()}</span> {name}
+                                    </span>
+                                  ))}
+                                </div>
                               </td>
                               <td className="py-3 pr-2" />
                             </tr>
