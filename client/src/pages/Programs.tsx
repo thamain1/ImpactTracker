@@ -79,7 +79,7 @@ export default function Programs() {
         <div className="bg-muted p-6 rounded-full mb-6">
           <FolderOpen className="w-12 h-12 text-muted-foreground" />
         </div>
-        <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome to ImpactTracker</h2>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">Welcome to Metriproof</h2>
         <p className="text-muted-foreground max-w-md mb-8">
           To get started, you need to register your nonprofit organization.
         </p>

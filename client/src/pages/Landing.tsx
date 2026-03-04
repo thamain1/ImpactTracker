@@ -38,7 +38,7 @@ export default function Landing() {
         if (error) throw error;
         toast({
           title: "Account created",
-          description: "Welcome to ImpactTracker! You are now signed in.",
+          description: "Welcome to Metriproof! You are now signed in.",
         });
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -61,8 +61,7 @@ export default function Landing() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
       <header className="px-6 py-6 flex items-center justify-between max-w-7xl mx-auto w-full">
         <div className="flex items-center gap-2">
-          <Globe2 className="w-8 h-8 text-primary" />
-          <span className="font-heading font-bold text-2xl text-slate-900">ImpactTracker</span>
+          <img src="/logo.png" alt="Metriproof" className="h-10 w-auto" />
         </div>
       </header>
 
@@ -122,7 +121,7 @@ export default function Landing() {
               </h2>
               <p className="text-sm text-slate-500">
                 {mode === "signin"
-                  ? "Sign in to your ImpactTracker account."
+                  ? "Sign in to your Metriproof account."
                   : "Start tracking your program impact today."}
               </p>
             </div>
@@ -223,7 +222,7 @@ export default function Landing() {
       </main>
 
       <footer className="bg-slate-50 py-8 px-6 border-t border-slate-200 text-center">
-        <p className="text-slate-500 font-medium text-sm">© 2024 ImpactTracker. Built for change makers.</p>
+        <p className="text-slate-500 font-medium text-sm">© 2025 Metriproof. Built for change makers.</p>
       </footer>
     </div>
   );
