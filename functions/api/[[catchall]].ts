@@ -972,6 +972,20 @@ app.get("/api/dashboard/charts", async (c) => {
 
     const ytdEntries = orgEntries.filter((e: any) => new Date(e.date).getFullYear() === currentYear);
 
+    // Fetch YTD survey responses for org programs (participant rows only)
+    const programIdsArray = [...orgProgramIds];
+    let ytdSurveys: any[] = [];
+    if (programIdsArray.length > 0) {
+      const { data: surveyData } = await supabase
+        .from("survey_responses")
+        .select("program_id, metric_id, quantity_delivered, created_at, impact_metrics(name, counts_as_participant)")
+        .in("program_id", programIdsArray)
+        .eq("respondent_type", "participant");
+      ytdSurveys = ((surveyData || []) as any[]).filter((r: any) =>
+        new Date(r.created_at).getUTCFullYear() === currentYear
+      );
+    }
+
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const monthlyCountsMap: Record<number, number> = {};
     ytdEntries.forEach((entry: any) => {
@@ -981,6 +995,13 @@ app.get("/api/dashboard/charts", async (c) => {
       const total = sumParticipantMetrics(mv, participantNames);
       monthlyCountsMap[month] = (monthlyCountsMap[month] || 0) + total;
     });
+    // Add survey participant counts by month (1 per qualifying row)
+    ytdSurveys.forEach((row: any) => {
+      const metric = row.impact_metrics as any;
+      if (metric && metric.counts_as_participant === false) return;
+      const month = new Date(row.created_at).getUTCMonth();
+      monthlyCountsMap[month] = (monthlyCountsMap[month] || 0) + 1;
+    });
     const participantsByMonth = monthNames.map((name, i) => ({ month: name, count: monthlyCountsMap[i] || 0 }));
 
     const programCounts: Record<number, number> = {};
@@ -988,6 +1009,12 @@ app.get("/api/dashboard/charts", async (c) => {
       const mv = entry.metricValues as Record<string, number>;
       const participantNames = participantNamesByProg[entry.programId] || new Set();
       programCounts[entry.programId] = (programCounts[entry.programId] || 0) + sumParticipantMetrics(mv, participantNames);
+    });
+    // Add survey participant counts by program
+    ytdSurveys.forEach((row: any) => {
+      const metric = row.impact_metrics as any;
+      if (metric && metric.counts_as_participant === false) return;
+      programCounts[row.program_id] = (programCounts[row.program_id] || 0) + 1;
     });
     const participantsByProgram = Object.entries(programCounts)
       .map(([pid, count]) => ({ programId: Number(pid), programName: (programMap.get(Number(pid)) as any)?.name || "Unknown", count }))
@@ -1004,9 +1031,26 @@ app.get("/api/dashboard/charts", async (c) => {
         }
       });
     });
+    // Add survey non-participant metric quantities (e.g. physical items distributed)
+    ytdSurveys.forEach((row: any) => {
+      const metric = row.impact_metrics as any;
+      if (!metric || metric.counts_as_participant !== false) return;
+      const metricName = metric.name as string;
+      if (!metricName) return;
+      if (!programMetrics[row.program_id]) programMetrics[row.program_id] = {};
+      programMetrics[row.program_id][metricName] = (programMetrics[row.program_id][metricName] || 0) + (row.quantity_delivered ?? 1);
+    });
     const resourcesByProgram = Object.entries(programMetrics).map(([pid, metrics]) => ({
       programId: Number(pid), programName: (programMap.get(Number(pid)) as any)?.name || "Unknown", metrics,
     }));
+
+    // Pre-compute survey participant counts per program for goalVsActual
+    const surveyParticipantsByProg: Record<number, number> = {};
+    ytdSurveys.forEach((row: any) => {
+      const metric = row.impact_metrics as any;
+      if (metric && metric.counts_as_participant === false) return;
+      surveyParticipantsByProg[row.program_id] = (surveyParticipantsByProg[row.program_id] || 0) + 1;
+    });
 
     const goalVsActual = orgPrograms.map((prog: any) => {
       const progEntries = ytdEntries.filter((e: any) => e.programId === prog.id);
@@ -1014,7 +1058,7 @@ app.get("/api/dashboard/charts", async (c) => {
       const actual = progEntries.reduce((sum: number, entry: any) => {
         const mv = entry.metricValues as Record<string, number>;
         return sum + sumParticipantMetrics(mv, participantNames);
-      }, 0);
+      }, 0) + (surveyParticipantsByProg[prog.id] || 0);
       let goalTarget: number | null = null;
       if (prog.goals) {
         const match = prog.goals.match(/(\d[\d,]*)/);

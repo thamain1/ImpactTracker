@@ -144,7 +144,8 @@ export default function ProgramDetails() {
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
       if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
-      const date = new Date(r.createdAt + 'Z').toISOString().split("T")[0];
+      const _d = new Date(r.createdAt + 'Z');
+      const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
       groups[date] = (groups[date] || 0) + (r.quantityDelivered ?? 1);
     });
     return groups;
