@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 :root {
-  /* Teal / Emerald Theme for Trust & Growth */
+  /* Blue Theme */
   --background: 210 20% 99%;
   --foreground: 200 50% 10%;
 
@@ -15,11 +15,11 @@
   --popover: 0 0% 100%;
   --popover-foreground: 200 50% 10%;
 
-  --primary: 175 60% 35%; /* Deep Teal */
+  --primary: 221 83% 40%; /* Deep Blue */
   --primary-foreground: 0 0% 100%;
 
-  --secondary: 180 20% 96%; /* Soft Mint/Gray */
-  --secondary-foreground: 175 60% 30%;
+  --secondary: 220 14% 96%;
+  --secondary-foreground: 221 83% 35%;
 
   --muted: 210 20% 96%;
   --muted-foreground: 215 16% 47%;
@@ -32,7 +32,7 @@
 
   --border: 214 32% 91%;
   --input: 214 32% 91%;
-  --ring: 175 60% 35%;
+  --ring: 221 83% 40%;
 
   --radius: 0.75rem;
 
@@ -50,8 +50,8 @@
   --popover: 222 47% 11%;
   --popover-foreground: 210 40% 98%;
 
-  --primary: 175 60% 45%;
-  --primary-foreground: 222 47% 11%;
+  --primary: 221 83% 55%;
+  --primary-foreground: 0 0% 100%;
 
   --secondary: 217 32% 17%;
   --secondary-foreground: 210 40% 98%;
@@ -67,7 +67,7 @@
 
   --border: 217 32% 17%;
   --input: 217 32% 17%;
-  --ring: 175 60% 45%;
+  --ring: 221 83% 55%;
 }
 
 @layer base {

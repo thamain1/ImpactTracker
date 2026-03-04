@@ -136,11 +136,11 @@ export default function Landing() {
           <div className="container mx-auto px-6">
             <div className="flex flex-col lg:flex-row items-center gap-16">
               <div className="w-full lg:w-1/2 flex flex-col items-start text-left">
-                <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight text-slate-900 leading-[1.1] mb-6">
+                <h1 className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-6">
                   Measure What Matters.{" "}
                   <span className="text-primary block">Prove What Works.</span>
                 </h1>
-                <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-xl">
+                <p className="text-xl font-medium text-slate-600 mb-10 leading-relaxed max-w-xl">
                   MetriProof is a simple platform that helps nonprofits capture participant data, track program outcomes,
                   and generate funder-ready reports — without messy spreadsheets.
                 </p>
