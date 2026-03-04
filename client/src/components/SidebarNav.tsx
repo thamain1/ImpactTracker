@@ -4,6 +4,7 @@ import {
   PieChart,
   FolderOpen,
   LogOut,
+  Building2,
   Menu,
   ShieldCheck,
   Settings,
@@ -37,9 +38,15 @@ export function SidebarNav() {
 
   const NavContent = () => (
     <div className="flex flex-col h-full bg-slate-900 text-white">
-      <div className="p-5 border-b border-slate-800">
-        <div className="bg-white rounded-lg px-3 py-2 inline-block">
-          <img src="/logo.png" alt="Metriproof" className="h-8 w-auto" />
+      <div className="p-6 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="bg-primary/20 p-2 rounded-lg">
+            <Building2 className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <div>
+            <h2 className="font-heading font-bold text-lg leading-none">ImpactTracker</h2>
+            <span className="text-xs text-slate-400 font-medium">Nonprofit Edition</span>
+          </div>
         </div>
       </div>
 
@@ -126,9 +133,8 @@ export function SidebarNav() {
 
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-slate-900 border-b border-slate-800">
         <div className="flex items-center gap-2">
-          <div className="bg-white rounded-md px-2 py-1">
-            <img src="/logo.png" alt="Metriproof" className="h-6 w-auto" />
-          </div>
+          <Building2 className="w-6 h-6 text-primary" />
+          <span className="font-heading font-bold text-white">ImpactTracker</span>
         </div>
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild>

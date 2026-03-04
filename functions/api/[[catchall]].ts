@@ -1649,6 +1649,46 @@ app.post("/api/program-builder/chat", async (c) => {
   }
 });
 
+// ─── Early Access (public, no auth) ───────────────────────────────────────────
+
+const earlyAccessSchema = z.object({
+  firstName:         z.string().min(1),
+  lastName:          z.string().min(1),
+  organizationName:  z.string().min(1),
+  role:              z.string().min(1),
+  email:             z.string().email(),
+  programCount:      z.string().min(1),
+  trackingMethod:    z.string().min(1),
+  biggestChallenge:  z.string().min(1),
+});
+
+app.post("/api/early-access", async (c) => {
+  const supabase = makeSupabase(c.env);
+  const body = await c.req.json().catch(() => null);
+  const parsed = earlyAccessSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.errors[0]?.message ?? "Invalid request";
+    return c.json({ message: msg }, 400);
+  }
+  const d = parsed.data;
+  const { data, error } = await supabase
+    .from("early_access_submissions")
+    .insert({
+      first_name:        d.firstName,
+      last_name:         d.lastName,
+      organization_name: d.organizationName,
+      role:              d.role,
+      email:             d.email,
+      program_count:     d.programCount,
+      tracking_method:   d.trackingMethod,
+      biggest_challenge: d.biggestChallenge,
+    })
+    .select()
+    .single();
+  if (error) return c.json({ message: error.message }, 500);
+  return c.json(data, 201);
+});
+
 // ─── Error handler ────────────────────────────────────────────────────────────
 
 app.onError((err, c) => {
