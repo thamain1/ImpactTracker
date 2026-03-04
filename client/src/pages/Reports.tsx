@@ -453,6 +453,7 @@ export default function Reports() {
     setPdfGenerating(true);
     setPdfPersonaLabel(PERSONA_LABELS[persona]);
     let aiNarrative = undefined;
+    let metricTotals: Record<string, number> = {};
     try {
       const pdfParticipantNames = participantMetricNames;
       const totalPrimary = (entries || []).reduce((sum: number, e: any) => {
@@ -486,7 +487,6 @@ export default function Reports() {
         if (match) goalTarget = parseInt(match[1].replace(/,/g, ""), 10);
       }
 
-      const metricTotals: Record<string, number> = {};
       selectedProgram.metrics.forEach((m: any) => {
         const entryTotal = (entries || []).reduce((sum: number, e: any) =>
           sum + Number((e.metricValues as any)?.[m.name] || 0), 0);
