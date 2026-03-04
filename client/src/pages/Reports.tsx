@@ -661,7 +661,7 @@ export default function Reports() {
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
+                  <Button variant="default" disabled={!pdfReady || pdfGenerating} data-testid="button-download-pdf">
                     {pdfGenerating
                       ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                       : <FileText className="w-4 h-4 mr-2" />}
