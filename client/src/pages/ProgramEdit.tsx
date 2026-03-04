@@ -649,7 +649,7 @@ export default function ProgramEdit() {
                               <SelectItem value="physical_item">Physical Item</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions/visits. Use "Physical Item" for goods distributed — unlocks inventory tracking.</p>
                         </div>
 
                         {(m as any).itemType === "physical_item" && (
@@ -663,7 +663,7 @@ export default function ProgramEdit() {
                                   defaultValue={(m as any).unitCost ?? ""}
                                   onBlur={e => updateMetric.mutate({ metricId: m.id, data: { unitCost: parseFloat(e.target.value) || null } })}
                                 />
-                                <p className="text-xs text-muted-foreground mt-0.5">Average market value per unit (e.g. $15.00 per backpack). Used to calculate how many units your program budget can cover.</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Market value per unit. Used to calculate budget coverage.</p>
                               </div>
                               <div>
                                 <label className="text-xs text-muted-foreground">Inventory</label>
@@ -673,7 +673,7 @@ export default function ProgramEdit() {
                                   defaultValue={(m as any).inventoryTotal ?? ""}
                                   onBlur={e => updateMetric.mutate({ metricId: m.id, data: { inventoryTotal: parseInt(e.target.value) || null } })}
                                 />
-                                <p className="text-xs text-muted-foreground mt-0.5">Total stock on hand right now (e.g. 500 backpacks). Automatically decrements with each survey check-in.</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Current stock on hand. Decrements with each check-in.</p>
                               </div>
                             </div>
                             <div>
@@ -691,7 +691,7 @@ export default function ProgramEdit() {
                                   <SelectItem value="custom_question">Custom Question</SelectItem>
                                 </SelectContent>
                               </Select>
-                              <p className="text-xs text-muted-foreground mt-0.5">Fixed: every check-in receives 1 unit (e.g. one meal per visit). Family Size: base qty for all + bonus if household exceeds a threshold. Custom Question: ask the participant a number at check-in (e.g. "How many children?").</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Fixed: 1 unit per check-in. Family Size: base + bonus by household size. Custom: ask participant a number.</p>
                             </div>
                             {(m as any).allocationType === "family_size_scaled" && (
                               <div className="grid grid-cols-2 gap-2">
@@ -703,7 +703,7 @@ export default function ProgramEdit() {
                                     defaultValue={(m as any).allocationThreshold ?? ""}
                                     onBlur={e => updateMetric.mutate({ metricId: m.id, data: { allocationThreshold: parseInt(e.target.value) || null } })}
                                   />
-                                  <p className="text-xs text-muted-foreground mt-0.5">Bonus units are added when a household's size exceeds this number.</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">Add bonus units when household size exceeds this number.</p>
                                 </div>
                                 <div>
                                   <label className="text-xs text-muted-foreground">Bonus Qty</label>
@@ -713,7 +713,7 @@ export default function ProgramEdit() {
                                     defaultValue={(m as any).allocationBonusQty ?? ""}
                                     onBlur={e => updateMetric.mutate({ metricId: m.id, data: { allocationBonusQty: parseInt(e.target.value) || null } })}
                                   />
-                                  <p className="text-xs text-muted-foreground mt-0.5">Extra units delivered above the threshold. Example: threshold 4, bonus 1 → a family of 5 receives 2 units.</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">Extra units above the threshold (e.g. threshold 4, bonus 1 → family of 5 gets 2 units).</p>
                                 </div>
                               </div>
                             )}
@@ -726,7 +726,7 @@ export default function ProgramEdit() {
                                   defaultValue={(m as any).customQuestionPrompt ?? ""}
                                   onBlur={e => updateMetric.mutate({ metricId: m.id, data: { customQuestionPrompt: e.target.value || null } })}
                                 />
-                                <p className="text-xs text-muted-foreground mt-0.5">This question appears on the kiosk survey. The participant's numeric answer determines how many units they receive.</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">Shown on the kiosk survey. Participant's answer determines units received.</p>
                               </div>
                             )}
                           </div>
@@ -799,7 +799,7 @@ export default function ProgramEdit() {
                           <SelectItem value="physical_item">Physical Item</SelectItem>
                         </SelectContent>
                       </Select>
-                      <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions/visits. Use "Physical Item" for goods distributed — unlocks inventory tracking.</p>
                     </div>
 
                     {newMetricItemType === "physical_item" && (
@@ -813,7 +813,7 @@ export default function ProgramEdit() {
                               value={newMetricUnitCost ?? ""}
                               onChange={e => setNewMetricUnitCost(parseFloat(e.target.value) || null)}
                             />
-                            <p className="text-xs text-muted-foreground mt-0.5">Average market value per unit (e.g. $15.00 per backpack). Used to calculate how many units your program budget can cover.</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Market value per unit. Used to calculate budget coverage.</p>
                           </div>
                           <div>
                             <Label className="text-xs text-muted-foreground">Starting Inventory</Label>
@@ -823,7 +823,7 @@ export default function ProgramEdit() {
                               value={newMetricInventoryTotal ?? ""}
                               onChange={e => setNewMetricInventoryTotal(parseInt(e.target.value) || null)}
                             />
-                            <p className="text-xs text-muted-foreground mt-0.5">Total stock on hand right now (e.g. 500 backpacks). Automatically decrements with each survey check-in.</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Current stock on hand. Decrements with each check-in.</p>
                           </div>
                         </div>
                         <div>
@@ -838,7 +838,7 @@ export default function ProgramEdit() {
                               <SelectItem value="custom_question">Custom Question</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-muted-foreground mt-0.5">Fixed: every check-in receives 1 unit (e.g. one meal per visit). Family Size: base qty for all + bonus if household exceeds a threshold. Custom Question: ask the participant a number at check-in (e.g. "How many children?").</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Fixed: 1 unit per check-in. Family Size: base + bonus by household size. Custom: ask participant a number.</p>
                         </div>
                         {newMetricAllocationType === "family_size_scaled" && (
                           <div className="grid grid-cols-2 gap-2">
@@ -850,7 +850,7 @@ export default function ProgramEdit() {
                                 value={newMetricAllocationThreshold ?? ""}
                                 onChange={e => setNewMetricAllocationThreshold(parseInt(e.target.value) || null)}
                               />
-                              <p className="text-xs text-muted-foreground mt-0.5">Bonus units are added when a household's size exceeds this number.</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Add bonus units when household size exceeds this number.</p>
                             </div>
                             <div>
                               <Label className="text-xs text-muted-foreground">Bonus Qty Above Threshold</Label>
@@ -860,7 +860,7 @@ export default function ProgramEdit() {
                                 value={newMetricAllocationBonusQty ?? ""}
                                 onChange={e => setNewMetricAllocationBonusQty(parseInt(e.target.value) || null)}
                               />
-                              <p className="text-xs text-muted-foreground mt-0.5">Extra units delivered above the threshold. Example: threshold 4, bonus 1 → a family of 5 receives 2 units.</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">Extra units above the threshold (e.g. threshold 4, bonus 1 → family of 5 gets 2 units).</p>
                             </div>
                           </div>
                         )}
@@ -873,7 +873,7 @@ export default function ProgramEdit() {
                               value={newMetricCustomQuestionPrompt ?? ""}
                               onChange={e => setNewMetricCustomQuestionPrompt(e.target.value || null)}
                             />
-                            <p className="text-xs text-muted-foreground mt-0.5">This question appears on the kiosk survey. The participant's numeric answer determines how many units they receive.</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">Shown on the kiosk survey. Participant's answer determines units received.</p>
                           </div>
                         )}
                       </div>
