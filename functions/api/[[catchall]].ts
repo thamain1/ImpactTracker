@@ -1235,6 +1235,7 @@ app.post("/api/report/ai-narrative", async (c) => {
       totalCost:          body.totalCost          || body.program?.totalCost         || 0,
       costPerParticipant: cppRaw,
       metrics:            body.program?.metrics   || [],
+      metricTotals:       body.metricTotals       || {},
     }, persona);
 
     return c.json(narrative);

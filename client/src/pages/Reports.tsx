@@ -486,6 +486,14 @@ export default function Reports() {
         if (match) goalTarget = parseInt(match[1].replace(/,/g, ""), 10);
       }
 
+      const metricTotals: Record<string, number> = {};
+      selectedProgram.metrics.forEach((m: any) => {
+        const entryTotal = (entries || []).reduce((sum: number, e: any) =>
+          sum + Number((e.metricValues as any)?.[m.name] || 0), 0);
+        const surveyTotal = surveyCheckIns.reduce((sum, ci) =>
+          sum + (ci.metricValues[m.name] || 0), 0);
+        metricTotals[m.name] = entryTotal + surveyTotal;
+      });
       const res = await apiRequest("POST", "/api/report/ai-narrative", {
         persona,
         programName:        selectedProgram.name,
@@ -500,7 +508,7 @@ export default function Reports() {
         targetPopulation:   selectedProgram.targetPopulation || "",
         goals:              selectedProgram.goals || "",
         goalTarget,
-        totalParticipants:  totalPrimary,
+        totalParticipants:  goalData?.actual ?? totalPrimary,
         primaryMetricName:  participantLabel,
         geographies:        geoSummary,
         geographyList:      geoList,
@@ -508,6 +516,7 @@ export default function Reports() {
         reachPercent,
         totalCost:          (selectedProgram as any).budget || 0,
         program:            selectedProgram,
+        metricTotals,
       });
       aiNarrative = await res.json();
     } catch (err) {
@@ -564,6 +573,14 @@ export default function Reports() {
         const match = selectedProgram.goals.match(/(\d[\d,]*)/);
         if (match) goalTarget = parseInt(match[1].replace(/,/g, ""), 10);
       }
+      const metricTotals: Record<string, number> = {};
+      selectedProgram.metrics.forEach((m: any) => {
+        const entryTotal = (entries || []).reduce((sum: number, e: any) =>
+          sum + Number((e.metricValues as any)?.[m.name] || 0), 0);
+        const surveyTotal = surveyCheckIns.reduce((sum, ci) =>
+          sum + (ci.metricValues[m.name] || 0), 0);
+        metricTotals[m.name] = entryTotal + surveyTotal;
+      });
       const res = await apiRequest("POST", "/api/report/ai-narrative", {
         persona: aiReportPersona,
         programName:        selectedProgram.name,
@@ -578,7 +595,7 @@ export default function Reports() {
         targetPopulation:   selectedProgram.targetPopulation || "",
         goals:              selectedProgram.goals || "",
         goalTarget,
-        totalParticipants:  totalPrimary,
+        totalParticipants:  goalData?.actual ?? totalPrimary,
         primaryMetricName:  participantLabel,
         geographies:        geoListStr.join(", "),
         geographyList:      geoListStr,
@@ -586,6 +603,7 @@ export default function Reports() {
         reachPercent,
         totalCost:          (selectedProgram as any).budget || 0,
         program:            selectedProgram,
+        metricTotals,
       });
       const narrative = await res.json();
       setAiReport(narrative);

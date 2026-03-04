@@ -95,6 +95,7 @@ export interface NarrativeInput {
   totalCost: number;
   costPerParticipant: string | null;
   metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
+  metricTotals?: Record<string, number>;
 }
 
 export interface AiNarrative {
@@ -161,7 +162,7 @@ function buildPersonaInputJson(input: NarrativeInput): object {
         byGeography: input.statsByGeo && input.statsByGeo.length > 0 ? input.statsByGeo : null,
       },
       secondary: resourceMetrics.length > 0
-        ? resourceMetrics.map(m => ({ name: m.name, unit: m.unit || null, value: null, notes: null }))
+        ? resourceMetrics.map(m => ({ name: m.name, unit: m.unit || null, value: input.metricTotals?.[m.name] ?? null, notes: null }))
         : null,
     },
     allowedMath: { enableDerivedNumbers: false },
