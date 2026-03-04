@@ -50,8 +50,9 @@ export default function ProgramEdit() {
   const updateMetric = useUpdateMetric(programId);
   const [newMetricName, setNewMetricName] = useState("");
   const [newMetricUnit, setNewMetricUnit] = useState("");
-  const [newMetricCountsAsParticipant, setNewMetricCountsAsParticipant] = useState(true);
-  const [newMetricItemType, setNewMetricItemType] = useState("service");
+  const [newMetricType, setNewMetricType] = useState<"participant" | "service" | "physical_item">("participant");
+  const [newMetricHourlyCost, setNewMetricHourlyCost] = useState<number | null>(null);
+  const [newMetricHoursCount, setNewMetricHoursCount] = useState<number | null>(null);
   const [newMetricUnitCost, setNewMetricUnitCost] = useState<number | null>(null);
   const [newMetricInventoryTotal, setNewMetricInventoryTotal] = useState<number | null>(null);
   const [newMetricAllocationType, setNewMetricAllocationType] = useState("fixed");
@@ -118,19 +119,22 @@ export default function ProgramEdit() {
       {
         name: newMetricName.trim(),
         unit: newMetricUnit.trim(),
-        countsAsParticipant: newMetricCountsAsParticipant,
-        itemType: newMetricItemType,
-        unitCost: newMetricUnitCost,
-        inventoryTotal: newMetricInventoryTotal,
-        allocationType: newMetricAllocationType,
-        allocationThreshold: newMetricAllocationThreshold,
-        allocationBonusQty: newMetricAllocationBonusQty,
-        customQuestionPrompt: newMetricCustomQuestionPrompt,
+        countsAsParticipant: newMetricType === "participant",
+        itemType: newMetricType === "physical_item" ? "physical_item" : "service",
+        hourlyCost: newMetricType === "service" ? newMetricHourlyCost : null,
+        hoursCount: newMetricType === "service" ? newMetricHoursCount : null,
+        unitCost: newMetricType === "physical_item" ? newMetricUnitCost : null,
+        inventoryTotal: newMetricType === "physical_item" ? newMetricInventoryTotal : null,
+        allocationType: newMetricType === "physical_item" ? newMetricAllocationType : "fixed",
+        allocationThreshold: newMetricType === "physical_item" ? newMetricAllocationThreshold : null,
+        allocationBonusQty: newMetricType === "physical_item" ? newMetricAllocationBonusQty : null,
+        customQuestionPrompt: newMetricType === "physical_item" ? newMetricCustomQuestionPrompt : null,
       },
       {
         onSuccess: () => {
-          setNewMetricName(""); setNewMetricUnit(""); setNewMetricCountsAsParticipant(true);
-          setNewMetricItemType("service"); setNewMetricUnitCost(null); setNewMetricInventoryTotal(null);
+          setNewMetricName(""); setNewMetricUnit(""); setNewMetricType("participant");
+          setNewMetricHourlyCost(null); setNewMetricHoursCount(null);
+          setNewMetricUnitCost(null); setNewMetricInventoryTotal(null);
           setNewMetricAllocationType("fixed"); setNewMetricAllocationThreshold(null);
           setNewMetricAllocationBonusQty(null); setNewMetricCustomQuestionPrompt(null);
         }
@@ -620,37 +624,69 @@ export default function ProgramEdit() {
                             </AlertDialogContent>
                           </AlertDialog>
                         </div>
-                        <label className="flex items-center gap-2 cursor-pointer ml-1">
-                          <Checkbox
-                            checked={(m as any).countsAsParticipant !== false}
-                            onCheckedChange={(checked) =>
-                              updateMetric.mutate({ metricId: m.id, data: { countsAsParticipant: !!checked } })
-                            }
-                            data-testid={`checkbox-participant-${m.id}`}
-                          />
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <UserCheck className="w-3 h-3" />
-                            Counts as participant (people served)
-                          </span>
-                        </label>
-
-                        {/* Item Type */}
-                        <div className="ml-1">
-                          <label className="text-xs text-muted-foreground">Item Type</label>
-                          <Select
-                            value={(m as any).itemType ?? "service"}
-                            onValueChange={v => updateMetric.mutate({ metricId: m.id, data: { itemType: v } })}
-                          >
-                            <SelectTrigger className="h-8 text-xs mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="service">Service</SelectItem>
-                              <SelectItem value="physical_item">Physical Item</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions/visits. Use "Physical Item" for goods distributed — unlocks inventory tracking.</p>
+                        {/* Metric Type — three mutually exclusive checkboxes */}
+                        <div className="ml-1 space-y-1">
+                          <p className="text-xs font-medium text-muted-foreground mb-1">Metric Type</p>
+                          {(["participant", "service", "physical_item"] as const).map((type) => {
+                            const currentType = (m as any).itemType === "physical_item"
+                              ? "physical_item"
+                              : (m as any).countsAsParticipant === false
+                                ? "service"
+                                : "participant";
+                            const labels: Record<string, string> = {
+                              participant: "Participant — counts as a person served",
+                              service: "Service Provided — a session, visit, or hour of service",
+                              physical_item: "Physical Item Provided — a good distributed to participants",
+                            };
+                            return (
+                              <label key={type} className="flex items-center gap-2 cursor-pointer">
+                                <Checkbox
+                                  checked={currentType === type}
+                                  onCheckedChange={(checked) => {
+                                    if (!checked) return;
+                                    updateMetric.mutate({
+                                      metricId: m.id,
+                                      data: {
+                                        countsAsParticipant: type === "participant",
+                                        itemType: type === "physical_item" ? "physical_item" : "service",
+                                      },
+                                    });
+                                  }}
+                                  data-testid={`checkbox-metric-type-${type}-${m.id}`}
+                                />
+                                <span className="text-xs text-muted-foreground">{labels[type]}</span>
+                              </label>
+                            );
+                          })}
                         </div>
+
+                        {/* Service fields */}
+                        {(m as any).itemType !== "physical_item" && (m as any).countsAsParticipant === false && (
+                          <div className="ml-1 space-y-2 border-l-2 border-primary/20 pl-3">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="text-xs text-muted-foreground">Hourly Cost ($)</label>
+                                <Input
+                                  type="number" min="0" step="0.01" placeholder="0.00"
+                                  className="h-8 text-xs mt-1"
+                                  defaultValue={(m as any).hourlyCost ?? ""}
+                                  onBlur={e => updateMetric.mutate({ metricId: m.id, data: { hourlyCost: parseFloat(e.target.value) || null } })}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Cost per hour of service delivery.</p>
+                              </div>
+                              <div>
+                                <label className="text-xs text-muted-foreground">Number of Hours</label>
+                                <Input
+                                  type="number" min="0" placeholder="e.g. 2"
+                                  className="h-8 text-xs mt-1"
+                                  defaultValue={(m as any).hoursCount ?? ""}
+                                  onBlur={e => updateMetric.mutate({ metricId: m.id, data: { hoursCount: parseInt(e.target.value) || null } })}
+                                />
+                                <p className="text-xs text-muted-foreground mt-0.5">Typical hours per session or service unit.</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {(m as any).itemType === "physical_item" && (
                           <div className="ml-1 space-y-2 border-l-2 border-primary/20 pl-3">
@@ -775,34 +811,57 @@ export default function ProgramEdit() {
                         Add
                       </Button>
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer mt-2 ml-1">
-                      <Checkbox
-                        checked={newMetricCountsAsParticipant}
-                        onCheckedChange={(checked) => setNewMetricCountsAsParticipant(!!checked)}
-                        data-testid="checkbox-new-metric-participant"
-                      />
-                      <span className="text-xs text-muted-foreground flex items-center gap-1">
-                        <UserCheck className="w-3 h-3" />
-                        Counts as participant (people served)
-                      </span>
-                    </label>
-
-                    {/* Item Type for new metric */}
-                    <div className="mt-2">
-                      <label className="text-xs text-muted-foreground">Item Type</label>
-                      <Select value={newMetricItemType} onValueChange={setNewMetricItemType}>
-                        <SelectTrigger className="h-8 text-xs mt-1">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="service">Service</SelectItem>
-                          <SelectItem value="physical_item">Physical Item</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions/visits. Use "Physical Item" for goods distributed — unlocks inventory tracking.</p>
+                    {/* Metric Type — three mutually exclusive checkboxes */}
+                    <div className="mt-2 ml-1 space-y-1">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Metric Type</p>
+                      {(["participant", "service", "physical_item"] as const).map((type) => {
+                        const labels: Record<string, string> = {
+                          participant: "Participant — counts as a person served",
+                          service: "Service Provided — a session, visit, or hour of service",
+                          physical_item: "Physical Item Provided — a good distributed to participants",
+                        };
+                        return (
+                          <label key={type} className="flex items-center gap-2 cursor-pointer">
+                            <Checkbox
+                              checked={newMetricType === type}
+                              onCheckedChange={(checked) => { if (checked) setNewMetricType(type); }}
+                              data-testid={`checkbox-new-metric-type-${type}`}
+                            />
+                            <span className="text-xs text-muted-foreground">{labels[type]}</span>
+                          </label>
+                        );
+                      })}
                     </div>
 
-                    {newMetricItemType === "physical_item" && (
+                    {/* Service fields for new metric */}
+                    {newMetricType === "service" && (
+                      <div className="mt-2 ml-1 space-y-2 border-l-2 border-primary/20 pl-3">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Hourly Cost ($)</Label>
+                            <Input
+                              type="number" min="0" step="0.01" placeholder="0.00"
+                              className="h-8 text-xs mt-1"
+                              value={newMetricHourlyCost ?? ""}
+                              onChange={e => setNewMetricHourlyCost(parseFloat(e.target.value) || null)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">Cost per hour of service delivery.</p>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Number of Hours</Label>
+                            <Input
+                              type="number" min="0" placeholder="e.g. 2"
+                              className="h-8 text-xs mt-1"
+                              value={newMetricHoursCount ?? ""}
+                              onChange={e => setNewMetricHoursCount(parseInt(e.target.value) || null)}
+                            />
+                            <p className="text-xs text-muted-foreground mt-0.5">Typical hours per session or service unit.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {newMetricType === "physical_item" && (
                       <div className="mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
                         <div className="grid grid-cols-2 gap-2">
                           <div>

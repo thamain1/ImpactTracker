@@ -79,6 +79,7 @@ export default function ProgramWizard() {
     form.setValue("metrics", [...current, {
       name: "", unit: "", countsAsParticipant: true,
       itemType: "service", allocationType: "fixed", allocationBaseQty: 1,
+      hourlyCost: null, hoursCount: null,
       unitCost: null, inventoryTotal: null,
       allocationThreshold: null, allocationBonusQty: null, customQuestionPrompt: null,
     }]);
@@ -502,43 +503,64 @@ export default function ProgramWizard() {
                           </Button>
                         )}
                       </div>
-                      <FormField
-                        control={form.control}
-                        name={`metrics.${index}.countsAsParticipant`}
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-2 ml-1">
-                            <FormControl>
+                      {/* Metric Type — three mutually exclusive checkboxes */}
+                      <div className="ml-1 space-y-1">
+                        <p className="text-xs font-medium text-muted-foreground mb-1">Metric Type</p>
+                        {(["participant", "service", "physical_item"] as const).map((type) => {
+                          const currentType = (metrics[index] as any).itemType === "physical_item"
+                            ? "physical_item"
+                            : (metrics[index] as any).countsAsParticipant === false
+                              ? "service"
+                              : "participant";
+                          const labels: Record<string, string> = {
+                            participant: "Participant — counts as a person served",
+                            service: "Service Provided — a session, visit, or hour of service",
+                            physical_item: "Physical Item Provided — a good distributed to participants",
+                          };
+                          return (
+                            <label key={type} className="flex items-center gap-2 cursor-pointer">
                               <Checkbox
-                                checked={field.value !== false}
-                                onCheckedChange={field.onChange}
-                                data-testid={`checkbox-participant-${index}`}
+                                checked={currentType === type}
+                                onCheckedChange={(checked) => {
+                                  if (!checked) return;
+                                  updateMetricField(index, "countsAsParticipant", type === "participant");
+                                  updateMetricField(index, "itemType", type === "physical_item" ? "physical_item" : "service");
+                                }}
+                                data-testid={`checkbox-metric-type-${type}-${index}`}
                               />
-                            </FormControl>
-                            <FormLabel className="text-xs text-muted-foreground font-normal cursor-pointer leading-none pb-0">
-                              <UserCheck className="w-3 h-3 inline mr-1" />
-                              Counts as participant (people served)
-                            </FormLabel>
-                          </FormItem>
-                        )}
-                      />
-
-                      {/* Item Type */}
-                      <div className="ml-1">
-                        <Label className="text-xs">Item Type</Label>
-                        <Select
-                          value={(metrics[index] as any).itemType ?? "service"}
-                          onValueChange={v => updateMetricField(index, "itemType", v)}
-                        >
-                          <SelectTrigger className="h-8 text-xs mt-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="service">Service</SelectItem>
-                            <SelectItem value="physical_item">Physical Item</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground mt-0.5">Use "Service" for sessions or visits (tutoring, health screenings, mentorship). Use "Physical Item" for goods you hand out (food boxes, backpacks, hygiene kits) — unlocks inventory tracking and allocation rules.</p>
+                              <span className="text-xs text-muted-foreground">{labels[type]}</span>
+                            </label>
+                          );
+                        })}
                       </div>
+
+                      {/* Service fields */}
+                      {(metrics[index] as any).itemType !== "physical_item" && (metrics[index] as any).countsAsParticipant === false && (
+                        <div className="ml-1 space-y-2 border-l-2 border-primary/20 pl-3">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <Label className="text-xs">Hourly Cost ($)</Label>
+                              <Input
+                                type="number" min="0" step="0.01" placeholder="0.00"
+                                className="h-8 text-xs mt-1"
+                                value={(metrics[index] as any).hourlyCost ?? ""}
+                                onChange={e => updateMetricField(index, "hourlyCost", parseFloat(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Cost per hour of service delivery.</p>
+                            </div>
+                            <div>
+                              <Label className="text-xs">Number of Hours</Label>
+                              <Input
+                                type="number" min="0" placeholder="e.g. 2"
+                                className="h-8 text-xs mt-1"
+                                value={(metrics[index] as any).hoursCount ?? ""}
+                                onChange={e => updateMetricField(index, "hoursCount", parseInt(e.target.value) || null)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-0.5">Typical hours per session or service unit.</p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Physical item fields */}
                       {(metrics[index] as any).itemType === "physical_item" && (

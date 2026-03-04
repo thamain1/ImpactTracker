@@ -79,6 +79,8 @@ const metricCreateSchema = z.object({
   unit: z.string().min(1),
   countsAsParticipant: z.boolean().optional().default(true),
   itemType: z.string().optional().default("service"),
+  hourlyCost: z.number().optional().nullable(),
+  hoursCount: z.number().int().optional().nullable(),
   unitCost: z.number().optional().nullable(),
   inventoryTotal: z.number().int().optional().nullable(),
   allocationType: z.string().optional().default("fixed"),
@@ -90,6 +92,8 @@ const metricCreateSchema = z.object({
 const metricUpdateSchema = z.object({
   countsAsParticipant: z.boolean().optional(),
   itemType: z.string().optional(),
+  hourlyCost: z.number().optional().nullable(),
+  hoursCount: z.number().int().optional().nullable(),
   unitCost: z.number().optional().nullable(),
   inventoryTotal: z.number().int().optional().nullable(),
   inventoryRemaining: z.number().int().optional().nullable(),
@@ -440,6 +444,8 @@ app.post("/api/programs", async (c) => {
       unit: m.unit,
       counts_as_participant: m.countsAsParticipant ?? true,
       item_type: m.itemType ?? "service",
+      hourly_cost: m.hourlyCost ?? null,
+      hours_count: m.hoursCount ?? null,
       unit_cost: m.unitCost ?? null,
       inventory_total: m.inventoryTotal ?? null,
       inventory_remaining: m.inventoryTotal ?? null,
@@ -518,6 +524,8 @@ app.post("/api/programs/:programId/metrics", async (c) => {
         unit: input.unit,
         counts_as_participant: input.countsAsParticipant ?? true,
         item_type: input.itemType ?? "service",
+        hourly_cost: input.hourlyCost ?? null,
+        hours_count: input.hoursCount ?? null,
         unit_cost: input.unitCost ?? null,
         inventory_total: input.inventoryTotal ?? null,
         inventory_remaining: input.inventoryTotal ?? null,
@@ -550,6 +558,8 @@ app.patch("/api/programs/:programId/metrics/:id", async (c) => {
     const metricUpdateData: Record<string, unknown> = {};
     if (input.countsAsParticipant !== undefined) metricUpdateData.counts_as_participant = input.countsAsParticipant;
     if (input.itemType !== undefined)             metricUpdateData.item_type = input.itemType;
+    if (input.hourlyCost !== undefined)           metricUpdateData.hourly_cost = input.hourlyCost;
+    if (input.hoursCount !== undefined)           metricUpdateData.hours_count = input.hoursCount;
     if (input.unitCost !== undefined)             metricUpdateData.unit_cost = input.unitCost;
     if (input.inventoryTotal !== undefined)       metricUpdateData.inventory_total = input.inventoryTotal;
     if (input.inventoryRemaining !== undefined)   metricUpdateData.inventory_remaining = input.inventoryRemaining;
