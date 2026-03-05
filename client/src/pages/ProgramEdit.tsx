@@ -720,6 +720,24 @@ export default function ProgramEdit() {
                           })}
                         </div>
 
+                        {/* Optional toggle — only for non-participant metrics */}
+                        {(m as any).countsAsParticipant === false && (
+                          <div className="flex items-center gap-2 ml-1 mt-2">
+                            <Checkbox
+                              checked={!!(m as any).optional}
+                              onCheckedChange={(checked) => {
+                                updateMetric.mutate({
+                                  metricId: m.id,
+                                  data: { optional: !!checked },
+                                });
+                              }}
+                            />
+                            <Label className="text-xs font-normal text-muted-foreground">
+                              Optional — show as checkbox in kiosk survey (can be unchecked by participant)
+                            </Label>
+                          </div>
+                        )}
+
                         {/* Service fields */}
                         {(m as any).itemType !== "physical_item" && (m as any).countsAsParticipant === false && (
                           <div className="ml-1 space-y-2 border-l-2 border-primary/20 pl-3">

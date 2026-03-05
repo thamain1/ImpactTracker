@@ -37,6 +37,62 @@ export const DEFAULT_AGE_BANDS: AgeBand[] = [
 const pick = (...values: string[]): AgeBand[] =>
   MASTER_AGE_BANDS.filter(b => values.includes(b.value));
 
+/** Numeric [min, max] age for each band value */
+export const BAND_RANGES: Record<string, [number, number]> = {
+  "newborn":  [0,   0],
+  "under-1":  [0,   0],
+  "1-4":      [1,   4],
+  "5-9":      [5,   9],
+  "10-12":    [10, 12],
+  "13-15":    [13, 15],
+  "16-18":    [16, 18],
+  "19-24":    [19, 24],
+  "25-34":    [25, 34],
+  "35-44":    [35, 44],
+  "45-54":    [45, 54],
+  "55-64":    [55, 64],
+  "65-74":    [65, 74],
+  "75-84":    [75, 84],
+  "85-100":   [85, 100],
+  "100+":     [100, 999],
+  "under-18": [0,  17],
+  "18-24":    [18, 24],
+  "65+":      [65, 999],
+};
+
+/** Keep only bands whose range overlaps [ageMin, ageMax] */
+export function filterBandsByAge(
+  bands: AgeBand[],
+  ageMin: number | null | undefined,
+  ageMax: number | null | undefined,
+): AgeBand[] {
+  if (ageMin == null && ageMax == null) return bands;
+  const lo = ageMin ?? 0;
+  const hi = ageMax ?? 999;
+  return bands.filter(b => {
+    const range = BAND_RANGES[b.value];
+    if (!range) return true; // unknown band — keep it
+    return range[0] <= hi && range[1] >= lo;
+  });
+}
+
+/**
+ * Single source of truth for age band resolution:
+ * 1. Explicit ageBands (program-configured) — use as-is
+ * 2. targetAgeMin / targetAgeMax — filter MASTER_AGE_BANDS
+ * 3. Fallback — DEFAULT_AGE_BANDS
+ */
+export function resolveAgeBands(
+  ageBands: AgeBand[] | null | undefined,
+  targetAgeMin: number | null | undefined,
+  targetAgeMax: number | null | undefined,
+): AgeBand[] {
+  if (ageBands && ageBands.length > 0) return ageBands;
+  if (targetAgeMin != null || targetAgeMax != null)
+    return filterBandsByAge(MASTER_AGE_BANDS, targetAgeMin, targetAgeMax);
+  return DEFAULT_AGE_BANDS;
+}
+
 export const AGE_BAND_PRESETS: { label: string; bands: AgeBand[] }[] = [
   { label: "General",                  bands: DEFAULT_AGE_BANDS },
   { label: "Infant & Early Childhood", bands: pick("newborn", "under-1", "1-4", "5-9") },

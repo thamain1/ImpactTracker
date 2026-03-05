@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { DEFAULT_AGE_BANDS } from "@/lib/ageBands";
+import { resolveAgeBands } from "@/lib/ageBands";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -21,6 +21,7 @@ interface SurveyMetric {
   customQuestionPrompt?: string | null;
   inventoryRemaining?: number | null;
   countsAsParticipant: boolean;
+  optional: boolean;
 }
 
 interface SurveyProgram {
@@ -36,6 +37,8 @@ interface SurveyData {
   orgMission: string;
   surveyLayout: string;
   ageBands: Array<{ value: string; label: string }> | null;
+  targetAgeMin: number | null;
+  targetAgeMax: number | null;
   programs: SurveyProgram[];
 }
 
@@ -457,7 +460,7 @@ export default function Survey() {
                 )}
                 {survey.programs.map(p => {
                   const checked = selectedProgramIds.includes(p.id);
-                  const resourceMetrics = p.metrics.filter(m => !m.countsAsParticipant);
+                  const resourceMetrics = p.metrics.filter(m => !m.countsAsParticipant && m.optional);
                   const showMetrics = checked && resourceMetrics.length > 0;
                   return (
                     <div key={p.id} className={`rounded-lg border transition-colors ${
@@ -580,9 +583,7 @@ export default function Survey() {
                 )}
 
                 {(() => {
-                  const bands = (survey.ageBands && survey.ageBands.length > 0)
-                    ? survey.ageBands
-                    : DEFAULT_AGE_BANDS;
+                  const bands = resolveAgeBands(survey.ageBands, survey.targetAgeMin, survey.targetAgeMax);
                   return survey.surveyLayout === "multiple_choice" ? (
                     <div className="space-y-2">
                       <Label>Age Range</Label>

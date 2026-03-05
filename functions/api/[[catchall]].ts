@@ -90,6 +90,7 @@ const metricCreateSchema = z.object({
   allocationThreshold: z.number().int().optional().nullable(),
   allocationBonusQty: z.number().int().optional().nullable(),
   customQuestionPrompt: z.string().optional().nullable(),
+  optional: z.boolean().optional().default(false),
 });
 const metricUpdateSchema = z.object({
   countsAsParticipant: z.boolean().optional(),
@@ -104,6 +105,7 @@ const metricUpdateSchema = z.object({
   allocationThreshold: z.number().int().optional().nullable(),
   allocationBonusQty: z.number().int().optional().nullable(),
   customQuestionPrompt: z.string().optional().nullable(),
+  optional: z.boolean().optional(),
 });
 
 const impactCreateSchema = z.object({
@@ -536,6 +538,7 @@ app.post("/api/programs/:programId/metrics", async (c) => {
         allocation_threshold: input.allocationThreshold ?? null,
         allocation_bonus_qty: input.allocationBonusQty ?? null,
         custom_question_prompt: input.customQuestionPrompt ?? null,
+        optional: input.optional ?? false,
       })
       .select().single();
     return c.json(toCamel(metric), 201);
@@ -570,6 +573,7 @@ app.patch("/api/programs/:programId/metrics/:id", async (c) => {
     if (input.allocationThreshold !== undefined)  metricUpdateData.allocation_threshold = input.allocationThreshold;
     if (input.allocationBonusQty !== undefined)   metricUpdateData.allocation_bonus_qty = input.allocationBonusQty;
     if (input.customQuestionPrompt !== undefined) metricUpdateData.custom_question_prompt = input.customQuestionPrompt;
+    if (input.optional !== undefined)            metricUpdateData.optional = input.optional;
 
     const { data: updated } = await supabase
       .from("impact_metrics")
@@ -1380,7 +1384,7 @@ app.get("/api/survey/:programId", async (c) => {
   if (isNaN(programId)) return c.json({ message: "Invalid program" }, 400);
 
   const { data: prog } = await supabase
-    .from("programs").select("id, name, org_id, survey_layout, age_bands").eq("id", programId).maybeSingle();
+    .from("programs").select("id, name, org_id, survey_layout, age_bands, target_age_min, target_age_max").eq("id", programId).maybeSingle();
   if (!prog) return c.json({ message: "Program not found" }, 404);
 
   const { data: org } = await supabase
@@ -1395,7 +1399,7 @@ app.get("/api/survey/:programId", async (c) => {
   const { data: allMetrics } = progIds.length > 0
     ? await supabase
         .from("impact_metrics")
-        .select("id, program_id, name, unit, item_type, counts_as_participant, allocation_type, allocation_base_qty, allocation_threshold, allocation_bonus_qty, custom_question_prompt, inventory_remaining")
+        .select("id, program_id, name, unit, item_type, counts_as_participant, allocation_type, allocation_base_qty, allocation_threshold, allocation_bonus_qty, custom_question_prompt, inventory_remaining, optional")
         .in("program_id", progIds)
     : { data: [] };
 
@@ -1404,6 +1408,8 @@ app.get("/api/survey/:programId", async (c) => {
     programName: prog.name,
     surveyLayout: prog.survey_layout ?? "standard",
     ageBands: prog.age_bands ?? null,
+    targetAgeMin: prog.target_age_min ?? null,
+    targetAgeMax: prog.target_age_max ?? null,
     orgName: org?.name ?? "",
     orgMission: org?.mission ?? "",
     programs: (orgProgs || []).map((p: any) => ({
@@ -1423,6 +1429,7 @@ app.get("/api/survey/:programId", async (c) => {
           allocationBonusQty: m.allocation_bonus_qty ?? null,
           customQuestionPrompt: m.custom_question_prompt ?? null,
           inventoryRemaining: m.inventory_remaining ?? null,
+          optional: m.optional ?? false,
         })),
     })),
   });
@@ -1548,7 +1555,7 @@ app.put("/api/survey-responses/:id", async (c) => {
   if (isNaN(id)) return c.json({ message: "Invalid id" }, 400);
 
   const { data: existing } = await supabase
-    .from("survey_responses").select("program_id").eq("id", id).maybeSingle();
+    .from("survey_responses").select("program_id, created_at").eq("id", id).maybeSingle();
   if (!existing) return c.json({ message: "Not found" }, 404);
   if (!(await userOwnsProgram(supabase, user.id, existing.program_id)))
     return c.json({ message: "Not authorized" }, 403);
@@ -1556,15 +1563,19 @@ app.put("/api/survey-responses/:id", async (c) => {
   try {
     const body = await c.req.json();
     const input = surveyUpdateSchema.parse(body);
-    const { error } = await supabase.from("survey_responses").update({
-      ...(input.respondentType  !== undefined && { respondent_type:  input.respondentType }),
-      ...(input.programId       !== undefined && { program_id:       input.programId }),
-      ...(input.email           !== undefined && { email:            input.email || null }),
-      ...(input.sex             !== undefined && { sex:              input.sex }),
-      ...(input.ageRange        !== undefined && { age_range:        input.ageRange }),
-      ...(input.familySize      !== undefined && { family_size:      input.familySize }),
-      ...(input.householdIncome !== undefined && { household_income: input.householdIncome }),
-    }).eq("id", id);
+    const updateFields: Record<string, unknown> = {};
+    if (input.respondentType  !== undefined) updateFields.respondent_type  = input.respondentType;
+    if (input.programId       !== undefined) updateFields.program_id       = input.programId;
+    if (input.email           !== undefined) updateFields.email            = input.email || null;
+    if (input.sex             !== undefined) updateFields.sex              = input.sex;
+    if (input.ageRange        !== undefined) updateFields.age_range        = input.ageRange;
+    if (input.familySize      !== undefined) updateFields.family_size      = input.familySize;
+    if (input.householdIncome !== undefined) updateFields.household_income = input.householdIncome;
+
+    // Batch update: apply to ALL rows in the same check-in (same program_id + created_at)
+    const { error } = await supabase.from("survey_responses").update(updateFields)
+      .eq("program_id", existing.program_id)
+      .eq("created_at", existing.created_at);
     if (error) throw error;
     const { data: updated } = await supabase.from("survey_responses").select("*").eq("id", id).maybeSingle();
     return c.json(toCamel(updated));
@@ -1581,12 +1592,15 @@ app.delete("/api/survey-responses/:id", async (c) => {
   if (isNaN(id)) return c.json({ message: "Invalid id" }, 400);
 
   const { data: existing } = await supabase
-    .from("survey_responses").select("program_id").eq("id", id).maybeSingle();
+    .from("survey_responses").select("program_id, created_at").eq("id", id).maybeSingle();
   if (!existing) return c.json({ message: "Not found" }, 404);
   if (!(await userOwnsProgram(supabase, user.id, existing.program_id)))
     return c.json({ message: "Not authorized" }, 403);
 
-  await supabase.from("survey_responses").delete().eq("id", id);
+  // Batch delete: remove ALL rows in the same check-in (same program_id + created_at)
+  await supabase.from("survey_responses").delete()
+    .eq("program_id", existing.program_id)
+    .eq("created_at", existing.created_at);
   return c.body(null, 204);
 });
 

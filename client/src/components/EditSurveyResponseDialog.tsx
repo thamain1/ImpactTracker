@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MASTER_AGE_BANDS, DEFAULT_AGE_BANDS } from "@/lib/ageBands";
+import { resolveAgeBands, type AgeBand } from "@/lib/ageBands";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,9 +28,12 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   orgPrograms: Program[];
   programId: number;
+  ageBands?: AgeBand[] | null;
+  targetAgeMin?: number | null;
+  targetAgeMax?: number | null;
 }
 
-export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId }: Props) {
+export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId, ageBands, targetAgeMin, targetAgeMax }: Props) {
   const update = useUpdateSurveyResponse(programId);
   const del = useDeleteSurveyResponse(programId);
 
@@ -132,13 +135,14 @@ export function EditSurveyResponseDialog({ response, open, onOpenChange, orgProg
               </Select>
             </div>
 
-            {/* Age Range — always shows full master list so staff can reclassify any response */}
+            {/* Age Range — resolved from program config; full master list is the fallback so staff can always reclassify */}
             {(() => {
-              // If the saved value isn't in the master list (e.g. legacy "under-18"), prepend it
-              const hasCurrentValue = !ageRange || ageRange === "__none__" || MASTER_AGE_BANDS.some(b => b.value === ageRange);
+              const resolvedBands = resolveAgeBands(ageBands, targetAgeMin, targetAgeMax);
+              // If the saved value isn't in the resolved list (e.g. legacy "under-18"), prepend it
+              const hasCurrentValue = !ageRange || ageRange === "__none__" || resolvedBands.some(b => b.value === ageRange);
               const displayBands = hasCurrentValue
-                ? MASTER_AGE_BANDS
-                : [{ value: ageRange, label: ageRange }, ...MASTER_AGE_BANDS];
+                ? resolvedBands
+                : [{ value: ageRange, label: ageRange }, ...resolvedBands];
               return (
                 <div className="space-y-1.5">
                   <Label>Age Range</Label>

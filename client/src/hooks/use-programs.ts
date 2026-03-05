@@ -69,6 +69,7 @@ export type MetricCreateData = {
   allocationThreshold?: number | null;
   allocationBonusQty?: number | null;
   customQuestionPrompt?: string | null;
+  optional?: boolean;
 };
 
 export type MetricUpdateData = {
@@ -82,6 +83,7 @@ export type MetricUpdateData = {
   allocationThreshold?: number | null;
   allocationBonusQty?: number | null;
   customQuestionPrompt?: string | null;
+  optional?: boolean;
 };
 
 export function useCreateMetric(programId: number) {

@@ -34,6 +34,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useOrganizations } from "@/hooks/use-organizations";
 import { usePrograms } from "@/hooks/use-programs";
 
+/** Parse a Supabase timestamp as UTC — handles both "+00:00" and bare ISO strings without double-appending 'Z'. */
+const parseTs = (ts: string): Date =>
+  new Date(ts.endsWith('Z') || ts.includes('+', 10) ? ts : ts + 'Z');
+
 export default function ProgramDetails() {
   const [, params] = useRoute("/programs/:id");
   const programId = parseInt(params?.id || "0");
@@ -96,7 +100,7 @@ export default function ProgramDetails() {
     if (!surveyResponses) return [];
     if (selectedYear === "all") return surveyResponses;
     const yr = parseInt(selectedYear);
-    return surveyResponses.filter((r: any) => new Date(r.createdAt + 'Z').getFullYear() === yr);
+    return surveyResponses.filter((r: any) => parseTs(r.createdAt).getFullYear() === yr);
   }, [surveyResponses, selectedYear]);
 
   // Deduplicated view of survey responses for the table — a single kiosk check-in creates
@@ -125,31 +129,37 @@ export default function ProgramDetails() {
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
-    // Survey responses — each check-in counts as 1 participant regardless of quantity delivered.
-    // Only count the countsAsParticipant metric row (metricId in participantMetricIds) to avoid
-    // inflating the count when a single check-in creates multiple rows (one per metric).
+    // Survey responses — each unique check-in (dedup by createdAt + email) counts as 1 participant.
+    // This correctly handles legacy check-ins that may lack a countsAsParticipant metric row.
+    const seenMonth = new Set<string>();
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
-      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
-      const month = new Date(r.createdAt + 'Z').getMonth();
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seenMonth.has(key)) return;
+      seenMonth.add(key);
+      const month = parseTs(r.createdAt).getMonth();
       monthCounts[month] = (monthCounts[month] || 0) + 1;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, participantMetricNames, participantMetricIds, yearFilteredSurveys]);
+  }, [entries, participantMetricNames, yearFilteredSurveys]);
 
-  // Group survey responses by date for the Recent Entries table — sum quantity for participant
-  // metrics only so multi-metric programs don't show inflated counts.
+  // Group survey responses by date for the Recent Entries table — one participant per unique
+  // check-in (dedup by createdAt + email) so legacy check-ins without participant metric rows
+  // are still counted.
   const surveyEntriesByDate = useMemo(() => {
     const groups: Record<string, number> = {};
+    const seen = new Set<string>();
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
-      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
-      const _d = new Date(r.createdAt + 'Z');
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      const _d = parseTs(r.createdAt);
       const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
-      groups[date] = (groups[date] || 0) + (r.quantityDelivered ?? 1);
+      groups[date] = (groups[date] || 0) + 1;
     });
     return groups;
-  }, [yearFilteredSurveys, participantMetricIds]);
+  }, [yearFilteredSurveys]);
 
   // Non-participant metric quantities from surveys grouped by local date, e.g. Diaper Kits.
   // Used to display these alongside the participant count in the Recent Entries survey rows.
@@ -161,7 +171,7 @@ export default function ProgramDetails() {
       if (participantMetricIds.has(r.metricId)) return; // skip participant metrics
       const metric = program?.metrics.find((m: any) => m.id === r.metricId);
       if (!metric) return;
-      const _d = new Date(r.createdAt + 'Z');
+      const _d = parseTs(r.createdAt);
       const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
       if (!groups[date]) groups[date] = {};
       groups[date][metric.name] = (groups[date][metric.name] || 0) + (r.quantityDelivered ?? 1);
@@ -169,14 +179,18 @@ export default function ProgramDetails() {
     return groups;
   }, [yearFilteredSurveys, participantMetricIds, program]);
 
-  // Total participants served: 1 per kiosk check-in + manual entry participant metric values.
-  // Count only rows for countsAsParticipant metrics to avoid double-counting when a single
-  // check-in creates multiple survey_responses rows (one per metric allocation).
+  // Total participants served: 1 per unique kiosk check-in (dedup by createdAt + email)
+  // + manual entry participant metric values.
   const totalParticipants = useMemo(() => {
-    const surveyCount = yearFilteredSurveys.filter((r: any) =>
-      r.respondentType === "participant" &&
-      (r.metricId == null || participantMetricIds.has(r.metricId))
-    ).length;
+    const seen = new Set<string>();
+    let surveyCount = 0;
+    yearFilteredSurveys.forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      surveyCount++;
+    });
     const manualCount = (entries || []).reduce((sum, entry) => {
       const mv = entry.metricValues as Record<string, number>;
       let total = 0;
@@ -184,7 +198,7 @@ export default function ProgramDetails() {
       return sum + total;
     }, 0);
     return surveyCount + manualCount;
-  }, [yearFilteredSurveys, entries, participantMetricNames, participantMetricIds]);
+  }, [yearFilteredSurveys, entries, participantMetricNames]);
 
   if (progLoading || statsLoading) {
     return (
@@ -215,22 +229,28 @@ export default function ProgramDetails() {
   });
 
   // Add survey quantities to matching metric KPI cards
-  // Route by metricId when present (new allocations), fall back to primary metric for legacy rows
-  const primaryMetricName = program.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ?? program.metrics[0]?.name;
   program.metrics.forEach((m: any) => {
-    const metricSurveyQty = yearFilteredSurveys
-      .filter((r: any) => r.respondentType === "participant" && r.metricId === m.id)
-      .reduce((sum: number, r: any) => sum + (r.quantityDelivered ?? 1), 0);
-    if (totalMetrics[m.name] !== undefined) {
-      totalMetrics[m.name] += metricSurveyQty;
+    if (m.countsAsParticipant !== false) {
+      // Participant metrics: count unique check-ins (dedup by createdAt + email)
+      // so legacy check-ins missing the participant metric row are still counted.
+      const seen = new Set<string>();
+      yearFilteredSurveys.forEach((r: any) => {
+        if (r.respondentType !== "participant") return;
+        seen.add(`${r.createdAt}|${r.email ?? ""}`);
+      });
+      if (totalMetrics[m.name] !== undefined) {
+        totalMetrics[m.name] += seen.size;
+      }
+    } else {
+      // Service metrics: sum actual allocations by metricId
+      const metricSurveyQty = yearFilteredSurveys
+        .filter((r: any) => r.respondentType === "participant" && r.metricId === m.id)
+        .reduce((sum: number, r: any) => sum + (r.quantityDelivered ?? 1), 0);
+      if (totalMetrics[m.name] !== undefined) {
+        totalMetrics[m.name] += metricSurveyQty;
+      }
     }
   });
-  // Legacy rows with no metricId: add 1 per response to the primary metric
-  const unlinkedCount = yearFilteredSurveys
-    .filter((r: any) => r.respondentType === "participant" && !r.metricId).length;
-  if (primaryMetricName && totalMetrics[primaryMetricName] !== undefined) {
-    totalMetrics[primaryMetricName] += unlinkedCount;
-  }
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
@@ -526,7 +546,7 @@ export default function ProgramDetails() {
                               <td className="py-3 text-right">
                                 <div className="flex flex-col items-end gap-0.5">
                                   <span className="text-xs text-slate-600">
-                                    <span className="font-bold text-slate-900">{row.count.toLocaleString()}</span> {primaryMetricName || "Participants"}
+                                    <span className="font-bold text-slate-900">{row.count.toLocaleString()}</span> {program.metrics.find((m: any) => m.countsAsParticipant !== false)?.name ?? "Participants"}
                                   </span>
                                   {surveyResourcesByDate[row.date] && Object.entries(surveyResourcesByDate[row.date]).map(([name, qty]) => (
                                     <span key={name} className="text-xs text-slate-600">
@@ -617,7 +637,7 @@ export default function ProgramDetails() {
                 <div>
                   <div className="text-sm opacity-80 mb-1">Last Updated</div>
                   <div className="font-bold text-xl" data-testid="text-last-updated">
-                    {entries?.[0] ? format(new Date(entries[0].createdAt! + 'Z'), 'MMM d, yyyy') : 'Never'}
+                    {entries?.[0] ? format(parseTs(entries[0].createdAt!), 'MMM d, yyyy') : 'Never'}
                   </div>
                 </div>
                 <div>
@@ -744,7 +764,7 @@ export default function ProgramDetails() {
                   {dedupedSurveyResponses.map((r: any) => (
                     <tr key={r.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50/50 transition-colors">
                       <td className="py-2.5 pl-2 text-slate-500 text-xs whitespace-nowrap">
-                        {format(new Date(r.createdAt + 'Z'), "MMM d, yyyy h:mm a")}
+                        {format(parseTs(r.createdAt), "MMM d, yyyy h:mm a")}
                       </td>
                       <td className="py-2.5">
                         <Badge
@@ -794,6 +814,9 @@ export default function ProgramDetails() {
         onOpenChange={(open) => { if (!open) setEditingSurveyResponse(null); }}
         orgPrograms={(orgPrograms || []).map((p: any) => ({ id: p.id, name: p.name }))}
         programId={programId}
+        ageBands={(program as any)?.ageBands ?? null}
+        targetAgeMin={(program as any)?.targetAgeMin ?? null}
+        targetAgeMax={(program as any)?.targetAgeMax ?? null}
       />
     </div>
   );
