@@ -31,6 +31,7 @@ const formSchema = z.object({
   costPerParticipant: z.string().optional().nullable(),
   locations: z.string().optional().nullable(),
   deliveryType: z.string().optional().nullable(),
+  surveyLayout: z.string().optional().nullable(),
   budget: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   staffCount: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   monthlyCapacity: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
@@ -76,6 +77,7 @@ export default function ProgramEdit() {
       costPerParticipant: "",
       locations: "",
       deliveryType: "",
+      surveyLayout: "standard",
       budget: null,
       staffCount: null,
       monthlyCapacity: null,
@@ -99,6 +101,7 @@ export default function ProgramEdit() {
         costPerParticipant: (program as any).costPerParticipant || "",
         locations: program.locations || "",
         deliveryType: (program as any).deliveryType || "",
+        surveyLayout: (program as any).surveyLayout || "standard",
         budget: (program as any).budget ?? null,
         staffCount: (program as any).staffCount ?? null,
         monthlyCapacity: (program as any).monthlyCapacity ?? null,
@@ -376,6 +379,25 @@ export default function ProgramEdit() {
                       </FormItem>
                     )}
                   />
+
+                  <div className="space-y-2">
+                    <Label>Survey Layout</Label>
+                    <Select
+                      value={form.watch("surveyLayout") ?? "standard"}
+                      onValueChange={v => form.setValue("surveyLayout", v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="standard">Standard (dropdowns)</SelectItem>
+                        <SelectItem value="multiple_choice">Multiple Choice (tap cards)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-slate-400">
+                      Multiple Choice shows large tappable buttons — recommended for kiosk use and NCIF grant reporting.
+                    </p>
+                  </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField

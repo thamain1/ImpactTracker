@@ -33,6 +33,7 @@ interface SurveyData {
   programName: string;
   orgName: string;
   orgMission: string;
+  surveyLayout: string;
   programs: SurveyProgram[];
 }
 
@@ -89,6 +90,21 @@ function initialState() {
     householdIncome: "",
     countdown: 5,
   };
+}
+
+function TapCard({ value, label, selected, onSelect }: {
+  value: string; label: string; selected: boolean; onSelect: () => void;
+}) {
+  return (
+    <button type="button" onClick={onSelect}
+      className={`rounded-lg border-2 py-3 px-2 text-sm font-medium transition-colors w-full ${
+        selected
+          ? "border-primary bg-primary/10 text-primary"
+          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+      }`}>
+      {label}
+    </button>
+  );
 }
 
 export default function Survey() {
@@ -439,7 +455,8 @@ export default function Survey() {
                 )}
                 {survey.programs.map(p => {
                   const checked = selectedProgramIds.includes(p.id);
-                  const showMetrics = checked && p.metrics.length > 1;
+                  const resourceMetrics = p.metrics.filter(m => !m.countsAsParticipant);
+                  const showMetrics = checked && resourceMetrics.length > 0;
                   return (
                     <div key={p.id} className={`rounded-lg border transition-colors ${
                       checked ? "border-primary bg-primary/5" : "border-slate-200"
@@ -456,7 +473,7 @@ export default function Survey() {
                       {showMetrics && (
                         <div className="px-4 pb-3 space-y-1.5 border-t border-primary/10">
                           <p className="text-xs text-slate-400 pt-2">Select resources for today:</p>
-                          {p.metrics.map(m => {
+                          {resourceMetrics.map(m => {
                             const metricChecked = selectedMetricIds.includes(m.id);
                             return (
                               <label key={m.id} className="flex items-center gap-2 cursor-pointer text-sm">
@@ -528,68 +545,135 @@ export default function Survey() {
                 <p className="text-slate-400 text-sm">All fields are optional.</p>
               </div>
               <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-2">
-                  <Label>Sex</Label>
-                  <Select value={sex} onValueChange={setSex}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Prefer not to say" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="non-binary">Non-binary</SelectItem>
-                      <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Age Range</Label>
-                  <Select value={ageRange} onValueChange={setAgeRange}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select age range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="under-18">Under 18</SelectItem>
-                      <SelectItem value="18-24">18–24</SelectItem>
-                      <SelectItem value="25-34">25–34</SelectItem>
-                      <SelectItem value="35-44">35–44</SelectItem>
-                      <SelectItem value="45-54">45–54</SelectItem>
-                      <SelectItem value="55-64">55–64</SelectItem>
-                      <SelectItem value="65+">65+</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Family Size</Label>
-                  <Select value={familySize} onValueChange={setFamilySize}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select family size" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {["1","2","3","4","5","6","7","8"].map(n => (
-                        <SelectItem key={n} value={n}>{n === "8" ? "8+" : n}</SelectItem>
+                {survey.surveyLayout === "multiple_choice" ? (
+                  <div className="space-y-2">
+                    <Label>Sex</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: "male",              label: "Male" },
+                        { value: "female",            label: "Female" },
+                        { value: "non-binary",        label: "Non-binary" },
+                        { value: "prefer-not-to-say", label: "Prefer not to say" },
+                      ].map(opt => (
+                        <TapCard key={opt.value} value={opt.value} label={opt.label}
+                          selected={sex === opt.value} onSelect={() => setSex(opt.value)} />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Sex</Label>
+                    <Select value={sex} onValueChange={setSex}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Prefer not to say" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="non-binary">Non-binary</SelectItem>
+                        <SelectItem value="prefer-not-to-say">Prefer not to say</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
-                <div className="space-y-2">
-                  <Label>Household Income</Label>
-                  <Select value={householdIncome} onValueChange={setHouseholdIncome}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select income range" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="under-25k">Under $25K</SelectItem>
-                      <SelectItem value="25k-49k">$25K–$49K</SelectItem>
-                      <SelectItem value="50k-74k">$50K–$74K</SelectItem>
-                      <SelectItem value="75k-99k">$75K–$99K</SelectItem>
-                      <SelectItem value="100k-plus">$100K+</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                {survey.surveyLayout === "multiple_choice" ? (
+                  <div className="space-y-2">
+                    <Label>Age Range</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: "under-18", label: "Under 18" },
+                        { value: "18-24",    label: "18–24" },
+                        { value: "25-34",    label: "25–34" },
+                        { value: "35-44",    label: "35–44" },
+                        { value: "45-54",    label: "45–54" },
+                        { value: "55-64",    label: "55–64" },
+                        { value: "65+",      label: "65+" },
+                      ].map(opt => (
+                        <TapCard key={opt.value} value={opt.value} label={opt.label}
+                          selected={ageRange === opt.value} onSelect={() => setAgeRange(opt.value)} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Age Range</Label>
+                    <Select value={ageRange} onValueChange={setAgeRange}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select age range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="under-18">Under 18</SelectItem>
+                        <SelectItem value="18-24">18–24</SelectItem>
+                        <SelectItem value="25-34">25–34</SelectItem>
+                        <SelectItem value="35-44">35–44</SelectItem>
+                        <SelectItem value="45-54">45–54</SelectItem>
+                        <SelectItem value="55-64">55–64</SelectItem>
+                        <SelectItem value="65+">65+</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {survey.surveyLayout === "multiple_choice" ? (
+                  <div className="space-y-2">
+                    <Label>Family Size</Label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {["1","2","3","4","5","6","7","8"].map(n => (
+                        <TapCard key={n} value={n} label={n === "8" ? "8+" : n}
+                          selected={familySize === n} onSelect={() => setFamilySize(n)} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Family Size</Label>
+                    <Select value={familySize} onValueChange={setFamilySize}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select family size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["1","2","3","4","5","6","7","8"].map(n => (
+                          <SelectItem key={n} value={n}>{n === "8" ? "8+" : n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                {survey.surveyLayout === "multiple_choice" ? (
+                  <div className="space-y-2">
+                    <Label>Household Income</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { value: "under-25k",  label: "Under $25K" },
+                        { value: "25k-49k",    label: "$25K–$49K" },
+                        { value: "50k-74k",    label: "$50K–$74K" },
+                        { value: "75k-99k",    label: "$75K–$99K" },
+                        { value: "100k-plus",  label: "$100K+" },
+                      ].map(opt => (
+                        <TapCard key={opt.value} value={opt.value} label={opt.label}
+                          selected={householdIncome === opt.value} onSelect={() => setHouseholdIncome(opt.value)} />
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Household Income</Label>
+                    <Select value={householdIncome} onValueChange={setHouseholdIncome}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select income range" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="under-25k">Under $25K</SelectItem>
+                        <SelectItem value="25k-49k">$25K–$49K</SelectItem>
+                        <SelectItem value="50k-74k">$50K–$74K</SelectItem>
+                        <SelectItem value="75k-99k">$75K–$99K</SelectItem>
+                        <SelectItem value="100k-plus">$100K+</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
