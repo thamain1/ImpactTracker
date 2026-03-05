@@ -865,7 +865,7 @@ export default function ProgramEdit() {
                         />
                       </div>
                       <div className="w-28">
-                        <label className="text-xs text-muted-foreground">Unit</label>
+                        <label className="text-xs text-muted-foreground">Measure</label>
                         <Input
                           placeholder="e.g. meals"
                           value={newMetricUnit}
