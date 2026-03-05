@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_AGE_BANDS } from "@/lib/ageBands";
 import { useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +35,7 @@ interface SurveyData {
   orgName: string;
   orgMission: string;
   surveyLayout: string;
+  ageBands: Array<{ value: string; label: string }> | null;
   programs: SurveyProgram[];
 }
 
@@ -577,43 +579,36 @@ export default function Survey() {
                   </div>
                 )}
 
-                {survey.surveyLayout === "multiple_choice" ? (
-                  <div className="space-y-2">
-                    <Label>Age Range</Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { value: "under-18", label: "Under 18" },
-                        { value: "18-24",    label: "18–24" },
-                        { value: "25-34",    label: "25–34" },
-                        { value: "35-44",    label: "35–44" },
-                        { value: "45-54",    label: "45–54" },
-                        { value: "55-64",    label: "55–64" },
-                        { value: "65+",      label: "65+" },
-                      ].map(opt => (
-                        <TapCard key={opt.value} value={opt.value} label={opt.label}
-                          selected={ageRange === opt.value} onSelect={() => setAgeRange(opt.value)} />
-                      ))}
+                {(() => {
+                  const bands = (survey.ageBands && survey.ageBands.length > 0)
+                    ? survey.ageBands
+                    : DEFAULT_AGE_BANDS;
+                  return survey.surveyLayout === "multiple_choice" ? (
+                    <div className="space-y-2">
+                      <Label>Age Range</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {bands.map(opt => (
+                          <TapCard key={opt.value} value={opt.value} label={opt.label}
+                            selected={ageRange === opt.value} onSelect={() => setAgeRange(opt.value)} />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label>Age Range</Label>
-                    <Select value={ageRange} onValueChange={setAgeRange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select age range" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="under-18">Under 18</SelectItem>
-                        <SelectItem value="18-24">18–24</SelectItem>
-                        <SelectItem value="25-34">25–34</SelectItem>
-                        <SelectItem value="35-44">35–44</SelectItem>
-                        <SelectItem value="45-54">45–54</SelectItem>
-                        <SelectItem value="55-64">55–64</SelectItem>
-                        <SelectItem value="65+">65+</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+                  ) : (
+                    <div className="space-y-2">
+                      <Label>Age Range</Label>
+                      <Select value={ageRange} onValueChange={setAgeRange}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select age range" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {bands.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  );
+                })()}
 
                 {survey.surveyLayout === "multiple_choice" ? (
                   <div className="space-y-2">

@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Loader2, ArrowLeft, Save, Clipboard, MapPin, Users, Target, Plus, Trash2, UserCheck } from "lucide-react";
+import { MASTER_AGE_BANDS, DEFAULT_AGE_BANDS, AGE_BAND_PRESETS, type AgeBand } from "@/lib/ageBands";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -32,6 +33,7 @@ const formSchema = z.object({
   locations: z.string().optional().nullable(),
   deliveryType: z.string().optional().nullable(),
   surveyLayout: z.string().optional().nullable(),
+  ageBands: z.array(z.object({ value: z.string(), label: z.string() })).optional().nullable(),
   budget: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   staffCount: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
   monthlyCapacity: z.coerce.number().int().min(0).optional().nullable().transform(v => v || null),
@@ -78,6 +80,7 @@ export default function ProgramEdit() {
       locations: "",
       deliveryType: "",
       surveyLayout: "standard",
+      ageBands: null,
       budget: null,
       staffCount: null,
       monthlyCapacity: null,
@@ -102,6 +105,7 @@ export default function ProgramEdit() {
         locations: program.locations || "",
         deliveryType: (program as any).deliveryType || "",
         surveyLayout: (program as any).surveyLayout || "standard",
+        ageBands: (program as any).ageBands ?? null,
         budget: (program as any).budget ?? null,
         staffCount: (program as any).staffCount ?? null,
         monthlyCapacity: (program as any).monthlyCapacity ?? null,
@@ -380,24 +384,58 @@ export default function ProgramEdit() {
                     )}
                   />
 
-                  <div className="space-y-2">
-                    <Label>Survey Layout</Label>
-                    <Select
-                      value={form.watch("surveyLayout") ?? "standard"}
-                      onValueChange={v => form.setValue("surveyLayout", v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="standard">Standard (dropdowns)</SelectItem>
-                        <SelectItem value="multiple_choice">Multiple Choice (tap cards)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-slate-400">
-                      Multiple Choice shows large tappable buttons — recommended for kiosk use and NCIF grant reporting.
-                    </p>
-                  </div>
+                  {/* Age Bands */}
+                  {(() => {
+                    const currentBands: AgeBand[] = form.watch("ageBands") ?? DEFAULT_AGE_BANDS;
+                    const isBandSelected = (v: string) => currentBands.some(b => b.value === v);
+                    const toggleBand = (band: AgeBand, on: boolean) => {
+                      if (on) {
+                        const next = MASTER_AGE_BANDS.filter(b =>
+                          isBandSelected(b.value) || b.value === band.value
+                        );
+                        form.setValue("ageBands", next);
+                      } else {
+                        form.setValue("ageBands", currentBands.filter(b => b.value !== band.value));
+                      }
+                    };
+                    return (
+                      <div className="space-y-3">
+                        <div>
+                          <Label>Age Bands (Survey)</Label>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Shown in the demographics step of the survey. Select a preset or customize.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {AGE_BAND_PRESETS.map(preset => (
+                            <Button
+                              key={preset.label}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => form.setValue("ageBands", preset.bands)}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 border rounded-md p-3 bg-slate-50">
+                          {MASTER_AGE_BANDS.map(band => (
+                            <label key={band.value} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <Checkbox
+                                checked={isBandSelected(band.value)}
+                                onCheckedChange={checked => toggleBand(band, !!checked)}
+                              />
+                              <span className="text-slate-600">{band.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {currentBands.length === 0 && (
+                          <p className="text-xs text-amber-600">Select at least one band — or choose a preset above.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <div className="grid grid-cols-2 gap-4">
                     <FormField

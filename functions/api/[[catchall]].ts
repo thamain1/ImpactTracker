@@ -59,6 +59,7 @@ const programCreateSchema = z.object({
   monthlyCapacity: z.number().optional().nullable(),
   zipCode: z.string().optional().nullable(),
   surveyLayout: z.enum(["standard", "multiple_choice"]).optional().default("standard"),
+  ageBands: z.array(z.object({ value: z.string(), label: z.string() })).optional().nullable(),
   metrics: z.array(z.object({
     name: z.string().min(1),
     unit: z.string().min(1),
@@ -1379,7 +1380,7 @@ app.get("/api/survey/:programId", async (c) => {
   if (isNaN(programId)) return c.json({ message: "Invalid program" }, 400);
 
   const { data: prog } = await supabase
-    .from("programs").select("id, name, org_id, survey_layout").eq("id", programId).maybeSingle();
+    .from("programs").select("id, name, org_id, survey_layout, age_bands").eq("id", programId).maybeSingle();
   if (!prog) return c.json({ message: "Program not found" }, 404);
 
   const { data: org } = await supabase
@@ -1402,6 +1403,7 @@ app.get("/api/survey/:programId", async (c) => {
     programId,
     programName: prog.name,
     surveyLayout: prog.survey_layout ?? "standard",
+    ageBands: prog.age_bands ?? null,
     orgName: org?.name ?? "",
     orgMission: org?.mission ?? "",
     programs: (orgProgs || []).map((p: any) => ({

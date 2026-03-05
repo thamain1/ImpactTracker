@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { DEFAULT_AGE_BANDS, type AgeBand } from "@/lib/ageBands";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +28,10 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   orgPrograms: Program[];
   programId: number;
+  ageBands?: AgeBand[] | null;
 }
 
-export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId }: Props) {
+export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId, ageBands }: Props) {
   const update = useUpdateSurveyResponse(programId);
   const del = useDeleteSurveyResponse(programId);
 
@@ -132,22 +134,28 @@ export function EditSurveyResponseDialog({ response, open, onOpenChange, orgProg
             </div>
 
             {/* Age Range */}
-            <div className="space-y-1.5">
-              <Label>Age Range</Label>
-              <Select value={ageRange || "__none__"} onValueChange={v => setAgeRange(v === "__none__" ? "" : v)}>
-                <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">—</SelectItem>
-                  <SelectItem value="under-18">Under 18</SelectItem>
-                  <SelectItem value="18-24">18–24</SelectItem>
-                  <SelectItem value="25-34">25–34</SelectItem>
-                  <SelectItem value="35-44">35–44</SelectItem>
-                  <SelectItem value="45-54">45–54</SelectItem>
-                  <SelectItem value="55-64">55–64</SelectItem>
-                  <SelectItem value="65+">65+</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {(() => {
+              const bands = (ageBands && ageBands.length > 0) ? ageBands : DEFAULT_AGE_BANDS;
+              // If the saved value isn't in the current band list, add it so it's still selectable
+              const hasCurrentValue = !ageRange || ageRange === "__none__" || bands.some(b => b.value === ageRange);
+              const displayBands = hasCurrentValue
+                ? bands
+                : [{ value: ageRange, label: ageRange }, ...bands];
+              return (
+                <div className="space-y-1.5">
+                  <Label>Age Range</Label>
+                  <Select value={ageRange || "__none__"} onValueChange={v => setAgeRange(v === "__none__" ? "" : v)}>
+                    <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">—</SelectItem>
+                      {displayBands.map(b => (
+                        <SelectItem key={b.value} value={b.value}>{b.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })()}
 
             {/* Family Size */}
             <div className="space-y-1.5">
