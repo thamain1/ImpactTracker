@@ -19,6 +19,7 @@ interface SurveyMetric {
   allocationBonusQty?: number | null;
   customQuestionPrompt?: string | null;
   inventoryRemaining?: number | null;
+  countsAsParticipant: boolean;
 }
 
 interface SurveyProgram {
@@ -48,12 +49,13 @@ type Role = "" | "participant" | "supporter";
 function calcAllocations(
   programs: SurveyProgram[],
   selectedProgramIds: number[],
+  selectedMetricIds: number[],
   familySize: number | null,
   customAnswers: Record<number, number>
 ): Allocation[] {
   const result: Allocation[] = [];
   for (const prog of programs.filter(p => selectedProgramIds.includes(p.id))) {
-    for (const metric of prog.metrics) {
+    for (const metric of prog.metrics.filter(m => selectedMetricIds.includes(m.id))) {
       let qty = metric.allocationBaseQty;
       if (metric.allocationType === "family_size_scaled"
           && familySize != null
@@ -99,6 +101,7 @@ export default function Survey() {
   const [step, setStep] = useState(0);
   const [role, setRole] = useState<Role>("");
   const [selectedProgramIds, setSelectedProgramIds] = useState<number[]>([]);
+  const [selectedMetricIds, setSelectedMetricIds] = useState<number[]>([]);
   const [email, setEmail] = useState("");
   const [sex, setSex] = useState("");
   const [ageRange, setAgeRange] = useState("");
@@ -111,8 +114,19 @@ export default function Survey() {
   // Allocation-related state
   const [customAnswers, setCustomAnswers] = useState<Record<number, number>>({});
   const [modalProgram, setModalProgram] = useState<SurveyProgram | null>(null);
+  const [modalQueue, setModalQueue] = useState<SurveyProgram[]>([]);
   const [modalAnswer, setModalAnswer] = useState("");
   const [allocations, setAllocations] = useState<Allocation[]>([]);
+
+  // When a modal closes, open the next queued program's modal
+  useEffect(() => {
+    if (!modalProgram && modalQueue.length > 0) {
+      const [next, ...rest] = modalQueue;
+      setModalProgram(next);
+      setModalAnswer("");
+      setModalQueue(rest);
+    }
+  }, [modalProgram, modalQueue]);
 
   // Fetch survey data on mount
   useEffect(() => {
@@ -157,24 +171,51 @@ export default function Survey() {
     setSubmitError(null);
     setCustomAnswers({});
     setAllocations([]);
+    setModalQueue([]);
+    setSelectedMetricIds([]);
   }
 
   function handleProgramCheck(prog: SurveyProgram, checked: boolean) {
     if (checked) {
       setSelectedProgramIds(prev => [...prev, prog.id]);
-      // If this program has a custom_question metric, open the modal
+      setSelectedMetricIds(prev => [...prev, ...prog.metrics.map(m => m.id)]);
+      // If this program has a custom_question metric, open or queue the modal
       const hasCustomQ = prog.metrics.some(m => m.allocationType === "custom_question");
       if (hasCustomQ) {
-        setModalProgram(prog);
-        setModalAnswer("");
+        if (modalProgram) {
+          // Another modal is already open — queue this one
+          setModalQueue(prev => [...prev, prog]);
+        } else {
+          setModalProgram(prog);
+          setModalAnswer("");
+        }
       }
     } else {
       setSelectedProgramIds(prev => prev.filter(id => id !== prog.id));
+      const progMetricIds = new Set(prog.metrics.map(m => m.id));
+      setSelectedMetricIds(prev => prev.filter(id => !progMetricIds.has(id)));
       setCustomAnswers(prev => {
         const next = { ...prev };
         delete next[prog.id];
         return next;
       });
+      // Remove from queue if it was waiting
+      setModalQueue(prev => prev.filter(p => p.id !== prog.id));
+    }
+  }
+
+  function handleMetricToggle(prog: SurveyProgram, metric: SurveyMetric) {
+    const isSelected = selectedMetricIds.includes(metric.id);
+    if (isSelected) {
+      const next = selectedMetricIds.filter(id => id !== metric.id);
+      const remainingForProg = prog.metrics.filter(m => next.includes(m.id));
+      if (remainingForProg.length === 0) {
+        handleProgramCheck(prog, false);
+      } else {
+        setSelectedMetricIds(next);
+      }
+    } else {
+      setSelectedMetricIds(prev => [...prev, metric.id]);
     }
   }
 
@@ -184,6 +225,7 @@ export default function Survey() {
     setCustomAnswers(prev => ({ ...prev, [modalProgram.id]: num }));
     setModalProgram(null);
     setModalAnswer("");
+    // useEffect will open next queued modal if any
   }
 
   async function submitResponse(type: Role) {
@@ -232,6 +274,25 @@ export default function Survey() {
         setStep(1);
       }
     } else if (step === 1) {
+      // Ensure all selected custom_question programs have been answered
+      if (survey) {
+        const unanswered = selectedProgramIds
+          .map(pid => survey.programs.find(p => p.id === pid))
+          .filter((p): p is SurveyProgram =>
+            !!p &&
+            p.metrics.some(
+              m => m.allocationType === "custom_question" && selectedMetricIds.includes(m.id)
+            ) &&
+            customAnswers[p.id] === undefined
+          );
+        if (unanswered.length > 0) {
+          const [first, ...rest] = unanswered;
+          setModalProgram(first);
+          setModalAnswer("");
+          setModalQueue(rest);
+          return;
+        }
+      }
       setStep(2);
     } else if (step === 2) {
       setStep(3);
@@ -239,7 +300,7 @@ export default function Survey() {
       // Compute allocations, then advance to preview step
       if (survey) {
         const fs = familySize ? parseInt(familySize) : null;
-        const computed = calcAllocations(survey.programs, selectedProgramIds, fs, customAnswers);
+        const computed = calcAllocations(survey.programs, selectedProgramIds, selectedMetricIds, fs, customAnswers);
         setAllocations(computed);
       }
       setStep(4);
@@ -274,7 +335,17 @@ export default function Survey() {
     <div className="min-h-screen bg-gradient-to-b from-slate-100 to-slate-50 flex flex-col">
       {/* Custom question modal */}
       {modalProgram && (
-        <Dialog open={!!modalProgram} onOpenChange={(open) => { if (!open) setModalProgram(null); }}>
+        <Dialog open={!!modalProgram} onOpenChange={(open) => {
+          if (!open && modalProgram) {
+            // Dismissed without confirming — deselect the program so it doesn't get a qty=0 allocation
+            setSelectedProgramIds(prev => prev.filter(id => id !== modalProgram.id));
+            setCustomAnswers(prev => { const n = { ...prev }; delete n[modalProgram.id]; return n; });
+            setModalProgram(null);
+            setModalAnswer("");
+            // Also clear queue since user is backing out
+            setModalQueue([]);
+          }
+        }}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle>{modalProgram.name}</DialogTitle>
@@ -368,23 +439,45 @@ export default function Survey() {
                 )}
                 {survey.programs.map(p => {
                   const checked = selectedProgramIds.includes(p.id);
+                  const showMetrics = checked && p.metrics.length > 1;
                   return (
-                    <label
-                      key={p.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                        checked
-                          ? "border-primary bg-primary/5"
-                          : "border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => handleProgramCheck(p, !checked)}
-                        className="accent-primary w-4 h-4"
-                      />
-                      <span className="text-slate-700 font-medium">{p.name}</span>
-                    </label>
+                    <div key={p.id} className={`rounded-lg border transition-colors ${
+                      checked ? "border-primary bg-primary/5" : "border-slate-200"
+                    }`}>
+                      <label className="flex items-center gap-3 p-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => handleProgramCheck(p, !checked)}
+                          className="accent-primary w-4 h-4"
+                        />
+                        <span className="text-slate-700 font-medium">{p.name}</span>
+                      </label>
+                      {showMetrics && (
+                        <div className="px-4 pb-3 space-y-1.5 border-t border-primary/10">
+                          <p className="text-xs text-slate-400 pt-2">Select resources for today:</p>
+                          {p.metrics.map(m => {
+                            const metricChecked = selectedMetricIds.includes(m.id);
+                            return (
+                              <label key={m.id} className="flex items-center gap-2 cursor-pointer text-sm">
+                                <input
+                                  type="checkbox"
+                                  checked={metricChecked}
+                                  onChange={() => handleMetricToggle(p, m)}
+                                  className="accent-primary w-3.5 h-3.5"
+                                />
+                                <span className={metricChecked ? "text-slate-700" : "text-slate-400 line-through"}>
+                                  {m.name}
+                                </span>
+                                {m.inventoryRemaining != null && m.inventoryRemaining <= 0 && (
+                                  <span className="text-xs text-amber-600 ml-1">(out of stock)</span>
+                                )}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>

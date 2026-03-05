@@ -1393,7 +1393,7 @@ app.get("/api/survey/:programId", async (c) => {
   const { data: allMetrics } = progIds.length > 0
     ? await supabase
         .from("impact_metrics")
-        .select("id, program_id, name, unit, item_type, allocation_type, allocation_base_qty, allocation_threshold, allocation_bonus_qty, custom_question_prompt, inventory_remaining")
+        .select("id, program_id, name, unit, item_type, counts_as_participant, allocation_type, allocation_base_qty, allocation_threshold, allocation_bonus_qty, custom_question_prompt, inventory_remaining")
         .in("program_id", progIds)
     : { data: [] };
 
@@ -1412,6 +1412,7 @@ app.get("/api/survey/:programId", async (c) => {
           name: m.name,
           unit: m.unit,
           itemType: m.item_type,
+          countsAsParticipant: m.counts_as_participant !== false,
           allocationType: m.allocation_type,
           allocationBaseQty: m.allocation_base_qty ?? 1,
           allocationThreshold: m.allocation_threshold ?? null,
@@ -1448,7 +1449,7 @@ app.post("/api/survey/:programId/respond", async (c) => {
       if (error) throw error;
     } else {
       // Participants: if allocations provided, insert one row per allocation with metric_id + quantity_delivered
-      const allocations = input.allocations ?? [];
+      const allocations = (input.allocations ?? []).filter((a: any) => a.qty > 0);
       if (allocations.length > 0) {
         const rows = allocations.map((a: any) => ({
           ...base,
@@ -1459,19 +1460,40 @@ app.post("/api/survey/:programId/respond", async (c) => {
         const { error } = await supabase.from("survey_responses").insert(rows);
         if (error) throw error;
 
-        // Deduct inventory for each physical-item metric allocation
-        for (const a of allocations.filter((a: any) => a.qty > 0)) {
-          const { data: m } = await supabase
-            .from("impact_metrics")
-            .select("inventory_remaining, item_type")
-            .eq("id", a.metricId)
-            .maybeSingle();
+        // Batch-fetch all metrics in one query
+        const metricIds = [...new Set(allocations.map((a: any) => a.metricId as number))];
+        const { data: metricRows } = await supabase
+          .from("impact_metrics")
+          .select("id, item_type, counts_as_participant, inventory_remaining")
+          .in("id", metricIds);
+        const metricMap = new Map((metricRows ?? []).map((m: any) => [m.id, m]));
+
+        // Deduct inventory for physical_item metrics
+        for (const a of allocations) {
+          const m = metricMap.get(a.metricId);
           if (m?.item_type === "physical_item" && m?.inventory_remaining != null) {
             await supabase
               .from("impact_metrics")
-              .update({ inventory_remaining: Math.max(0, (m.inventory_remaining ?? 0) - a.qty) })
+              .update({ inventory_remaining: Math.max(0, m.inventory_remaining - a.qty) })
               .eq("id", a.metricId);
           }
+        }
+
+        // Sentinel: insert null-metric-id row for programs where ALL selected metrics
+        // have counts_as_participant=false, so the visit always counts as 1 participant.
+        const uniqueProgIds = [...new Set(allocations.map((a: any) => a.programId as number))];
+        const sentinelRows: object[] = [];
+        for (const pid of uniqueProgIds) {
+          const progAllocs = allocations.filter((a: any) => a.programId === pid);
+          const allServiceOnly = progAllocs.every(
+            (a: any) => metricMap.get(a.metricId)?.counts_as_participant === false
+          );
+          if (allServiceOnly) {
+            sentinelRows.push({ ...base, program_id: pid, quantity_delivered: 1 });
+          }
+        }
+        if (sentinelRows.length > 0) {
+          await supabase.from("survey_responses").insert(sentinelRows);
         }
       } else {
         // No allocations — fall back to one row per selected program
