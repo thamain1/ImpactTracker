@@ -384,59 +384,6 @@ export default function ProgramEdit() {
                     )}
                   />
 
-                  {/* Age Bands */}
-                  {(() => {
-                    const currentBands: AgeBand[] = form.watch("ageBands") ?? DEFAULT_AGE_BANDS;
-                    const isBandSelected = (v: string) => currentBands.some(b => b.value === v);
-                    const toggleBand = (band: AgeBand, on: boolean) => {
-                      if (on) {
-                        const next = MASTER_AGE_BANDS.filter(b =>
-                          isBandSelected(b.value) || b.value === band.value
-                        );
-                        form.setValue("ageBands", next);
-                      } else {
-                        form.setValue("ageBands", currentBands.filter(b => b.value !== band.value));
-                      }
-                    };
-                    return (
-                      <div className="space-y-3">
-                        <div>
-                          <Label>Age Bands (Survey)</Label>
-                          <p className="text-xs text-slate-400 mt-0.5">
-                            Shown in the demographics step of the survey. Select a preset or customize.
-                          </p>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {AGE_BAND_PRESETS.map(preset => (
-                            <Button
-                              key={preset.label}
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => form.setValue("ageBands", preset.bands)}
-                            >
-                              {preset.label}
-                            </Button>
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-1.5 border rounded-md p-3 bg-slate-50">
-                          {MASTER_AGE_BANDS.map(band => (
-                            <label key={band.value} className="flex items-center gap-2 cursor-pointer text-sm">
-                              <Checkbox
-                                checked={isBandSelected(band.value)}
-                                onCheckedChange={checked => toggleBand(band, !!checked)}
-                              />
-                              <span className="text-slate-600">{band.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                        {currentBands.length === 0 && (
-                          <p className="text-xs text-amber-600">Select at least one band — or choose a preset above.</p>
-                        )}
-                      </div>
-                    );
-                  })()}
-
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -589,6 +536,59 @@ export default function ProgramEdit() {
                       )}
                     />
                   </div>
+
+                  {/* Age Bands */}
+                  {(() => {
+                    const currentBands: AgeBand[] = form.watch("ageBands") ?? DEFAULT_AGE_BANDS;
+                    const isBandSelected = (v: string) => currentBands.some(b => b.value === v);
+                    const toggleBand = (band: AgeBand, on: boolean) => {
+                      if (on) {
+                        const next = MASTER_AGE_BANDS.filter(b =>
+                          isBandSelected(b.value) || b.value === band.value
+                        );
+                        form.setValue("ageBands", next);
+                      } else {
+                        form.setValue("ageBands", currentBands.filter(b => b.value !== band.value));
+                      }
+                    };
+                    return (
+                      <div className="space-y-3">
+                        <div>
+                          <Label>Age Bands (Survey)</Label>
+                          <p className="text-xs text-slate-400 mt-0.5">
+                            Shown in the demographics step of the survey. Select a preset or customize.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {AGE_BAND_PRESETS.map(preset => (
+                            <Button
+                              key={preset.label}
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => form.setValue("ageBands", preset.bands)}
+                            >
+                              {preset.label}
+                            </Button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-2 gap-1.5 border rounded-md p-3 bg-slate-50">
+                          {MASTER_AGE_BANDS.map(band => (
+                            <label key={band.value} className="flex items-center gap-2 cursor-pointer text-sm">
+                              <Checkbox
+                                checked={isBandSelected(band.value)}
+                                onCheckedChange={checked => toggleBand(band, !!checked)}
+                              />
+                              <span className="text-slate-600">{band.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        {currentBands.length === 0 && (
+                          <p className="text-xs text-amber-600">Select at least one band — or choose a preset above.</p>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   <FormField
                     control={form.control}
