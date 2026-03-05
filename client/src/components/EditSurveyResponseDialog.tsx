@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { DEFAULT_AGE_BANDS, type AgeBand } from "@/lib/ageBands";
+import { MASTER_AGE_BANDS, DEFAULT_AGE_BANDS } from "@/lib/ageBands";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,10 +28,9 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   orgPrograms: Program[];
   programId: number;
-  ageBands?: AgeBand[] | null;
 }
 
-export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId, ageBands }: Props) {
+export function EditSurveyResponseDialog({ response, open, onOpenChange, orgPrograms, programId }: Props) {
   const update = useUpdateSurveyResponse(programId);
   const del = useDeleteSurveyResponse(programId);
 
@@ -133,14 +132,13 @@ export function EditSurveyResponseDialog({ response, open, onOpenChange, orgProg
               </Select>
             </div>
 
-            {/* Age Range */}
+            {/* Age Range — always shows full master list so staff can reclassify any response */}
             {(() => {
-              const bands = (ageBands && ageBands.length > 0) ? ageBands : DEFAULT_AGE_BANDS;
-              // If the saved value isn't in the current band list, add it so it's still selectable
-              const hasCurrentValue = !ageRange || ageRange === "__none__" || bands.some(b => b.value === ageRange);
+              // If the saved value isn't in the master list (e.g. legacy "under-18"), prepend it
+              const hasCurrentValue = !ageRange || ageRange === "__none__" || MASTER_AGE_BANDS.some(b => b.value === ageRange);
               const displayBands = hasCurrentValue
-                ? bands
-                : [{ value: ageRange, label: ageRange }, ...bands];
+                ? MASTER_AGE_BANDS
+                : [{ value: ageRange, label: ageRange }, ...MASTER_AGE_BANDS];
               return (
                 <div className="space-y-1.5">
                   <Label>Age Range</Label>

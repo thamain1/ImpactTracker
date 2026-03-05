@@ -794,7 +794,6 @@ export default function ProgramDetails() {
         onOpenChange={(open) => { if (!open) setEditingSurveyResponse(null); }}
         orgPrograms={(orgPrograms || []).map((p: any) => ({ id: p.id, name: p.name }))}
         programId={programId}
-        ageBands={(program as any).ageBands ?? null}
       />
     </div>
   );
