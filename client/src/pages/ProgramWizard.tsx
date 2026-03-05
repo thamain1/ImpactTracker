@@ -52,6 +52,7 @@ export default function ProgramWizard() {
       orgId: orgs?.[0]?.id || 0,
       name: "",
       description: "",
+      budget: null,
       type: "",
       status: "active",
       startDate: "",
@@ -226,6 +227,29 @@ export default function ProgramWizard() {
                         <FormControl>
                           <Textarea placeholder="Briefly describe the program's purpose and activities..." {...field} value={field.value || ""} data-testid="input-description" />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="budget"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Program Budget ($)</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min={0}
+                            placeholder="e.g. 50000"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={e => field.onChange(e.target.value === "" ? null : Number(e.target.value))}
+                            data-testid="input-budget"
+                          />
+                        </FormControl>
+                        <FormDescription>Total program budget in dollars.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
