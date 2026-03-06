@@ -423,19 +423,30 @@ export default function ProgramDetails() {
           <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0).map((m: any) => {
-              const budget   = (program as any).budget as number;
-              const maxUnits = Math.floor(budget / m.unitCost);
+              const budget     = (program as any).budget as number;
+              const budgetUnits = Math.floor(budget / m.unitCost);
+              const inventory   = m.inventoryTotal ?? null;
+              const effectiveCapacity = inventory != null
+                ? Math.max(budgetUnits, inventory)
+                : budgetUnits;
+              const effectiveCost = inventory != null && inventory > budgetUnits
+                ? +(budget / inventory).toFixed(2)
+                : m.unitCost;
+              const inventoryWins = inventory != null && inventory > budgetUnits;
+
               const goalsText: string | null = (program as any).goals ?? null;
               const goalMatch = goalsText?.match(/(\d[\d,]*)/);
               const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
-              const shortfall = goalTarget != null && maxUnits < goalTarget ? goalTarget - maxUnits : null;
-              const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
+              const shortfall = goalTarget != null && effectiveCapacity < goalTarget ? goalTarget - effectiveCapacity : null;
+              const dollarShortfall = shortfall != null ? shortfall * effectiveCost : null;
               return (
                 <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
                   <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
-                  <p className={`text-2xl font-bold mt-1${shortfall != null ? " text-red-700" : ""}`}>{maxUnits.toLocaleString()}</p>
+                  <p className={`text-2xl font-bold mt-1${shortfall != null ? " text-red-700" : ""}`}>{effectiveCapacity.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">
-                    max units at ${m.unitCost}/unit from ${budget.toLocaleString()} budget
+                    {inventoryWins
+                      ? `units on hand · avg $${effectiveCost}/unit from $${budget.toLocaleString()} budget + donations`
+                      : `max units at $${m.unitCost}/unit from $${budget.toLocaleString()} budget`}
                   </p>
                   {shortfall != null && (
                     <p className="text-xs text-red-600 font-medium mt-2">
