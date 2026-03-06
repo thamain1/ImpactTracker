@@ -784,9 +784,9 @@ export function generateImpactStudyPdf(data: ReportData) {
     if (totalPrimary) finData.push([`Total ${primaryMetric}`, formatNumber(totalPrimary)]);
 
     Object.entries(secondaryMetrics).forEach(([name, val]) => {
-      if (val > 0 && costPerParticipant) {
-        const unitCost = totalCost ? totalCost / val : 0;
-        finData.push([`Cost per ${name}`, unitCost > 0 ? formatCurrency(unitCost) : "N/A"]);
+      if (val > 0 && totalCost && totalCost > 0) {
+        const unitCost = totalCost / val;
+        finData.push([`Cost per ${name}`, formatCurrency(unitCost)]);
       }
     });
 

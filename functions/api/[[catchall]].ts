@@ -458,6 +458,7 @@ app.post("/api/programs", async (c) => {
       allocation_threshold: m.allocationThreshold ?? null,
       allocation_bonus_qty: m.allocationBonusQty ?? null,
       custom_question_prompt: m.customQuestionPrompt ?? null,
+      optional: m.optional ?? false,
     }));
     let createdMetrics: any[] = [];
     if (metricsInsert.length > 0) {
@@ -1171,14 +1172,18 @@ app.get("/api/admin/stats", async (c) => {
 
 app.get("/api/organizations/:orgId/service-areas", async (c) => {
   const supabase = makeSupabase(c.env);
+  const user = c.get("user");
   const orgId = Number(c.req.param("orgId"));
+  if (!(await userOwnsOrg(supabase, user.id, orgId))) return c.json({ message: "Not authorized" }, 403);
   const { data: areas } = await supabase.from("service_areas").select("*").eq("org_id", orgId);
   return c.json((areas || []).map((a: any) => toCamel(a)));
 });
 
 app.post("/api/organizations/:orgId/service-areas", async (c) => {
   const supabase = makeSupabase(c.env);
+  const user = c.get("user");
   const orgId = Number(c.req.param("orgId"));
+  if (!(await userOwnsOrg(supabase, user.id, orgId))) return c.json({ message: "Not authorized" }, 403);
   try {
     const body = await c.req.json();
     const { data: area, error } = await supabase
@@ -1193,6 +1198,9 @@ app.post("/api/organizations/:orgId/service-areas", async (c) => {
 
 app.put("/api/organizations/:orgId/service-areas/:id", async (c) => {
   const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const orgId = Number(c.req.param("orgId"));
+  if (!(await userOwnsOrg(supabase, user.id, orgId))) return c.json({ message: "Not authorized" }, 403);
   const id = Number(c.req.param("id"));
   try {
     const body = await c.req.json();
@@ -1208,6 +1216,9 @@ app.put("/api/organizations/:orgId/service-areas/:id", async (c) => {
 
 app.delete("/api/organizations/:orgId/service-areas/:id", async (c) => {
   const supabase = makeSupabase(c.env);
+  const user = c.get("user");
+  const orgId = Number(c.req.param("orgId"));
+  if (!(await userOwnsOrg(supabase, user.id, orgId))) return c.json({ message: "Not authorized" }, 403);
   await supabase.from("service_areas").delete().eq("id", Number(c.req.param("id")));
   return c.body(null, 204);
 });

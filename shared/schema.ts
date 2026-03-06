@@ -58,6 +58,8 @@ export const programs = pgTable("programs", {
   staffCount: integer("staff_count"),    // Number of staff
   monthlyCapacity: integer("monthly_capacity"), // Max participants per month
   zipCode: text("zip_code"),            // Program-level zip override (falls back to org zip)
+  surveyLayout: text("survey_layout").default("standard"),
+  ageBands: jsonb("age_bands"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -76,6 +78,9 @@ export const impactMetrics = pgTable("impact_metrics", {
   allocationThreshold:  integer("allocation_threshold"),
   allocationBonusQty:   integer("allocation_bonus_qty"),
   customQuestionPrompt: text("custom_question_prompt"),
+  hourlyCost: doublePrecision("hourly_cost"),
+  hoursCount: integer("hours_count"),
+  optional: boolean("optional").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -249,5 +254,8 @@ export type CreateProgramRequest = InsertProgram & {
     allocationThreshold?: number | null;
     allocationBonusQty?: number | null;
     customQuestionPrompt?: string | null;
+    hourlyCost?: number | null;
+    hoursCount?: number | null;
+    optional?: boolean;
   }[];
 };
