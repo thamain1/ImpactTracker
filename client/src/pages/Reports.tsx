@@ -94,6 +94,10 @@ const CITY_CANONICAL_MAP: Record<string, string> = {
   "florence-graham":  "Los Angeles",
 };
 
+/** Parse a Supabase timestamp as a Date. Handles both TIMESTAMP (no tz) and TIMESTAMPTZ (+00:00). */
+const parseTs = (ts: string): Date =>
+  new Date(ts.endsWith('Z') || ts.includes('+', 10) ? ts : ts + 'Z');
+
 export default function Reports() {
   const { toast } = useToast();
   const { data: orgs } = useOrganizations();
@@ -213,7 +217,7 @@ export default function Reports() {
     // Only add survey counts in the year-filtered path; the server already
     // includes them when selectedYear === "all" (via /api/impact/stats).
     const filteredSurveys = surveyResponses?.filter((r: any) => {
-      const yr = new Date(r.createdAt + 'Z').getFullYear();
+      const yr = parseTs(r.createdAt).getFullYear();
       return yr === parseInt(selectedYear);
     });
     const primaryMetric =
@@ -224,6 +228,7 @@ export default function Reports() {
       const seenGeo = new Set<string>();
       filteredSurveys?.forEach((resp: any) => {
         if (resp.respondentType !== "participant") return;
+        if (resp.metricId != null && !participantMetricIds.has(resp.metricId)) return;
         const key = `${resp.createdAt}|${resp.email ?? ""}`;
         if (seenGeo.has(key)) return;
         seenGeo.add(key);
@@ -314,17 +319,20 @@ export default function Reports() {
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
     // Survey responses — deduplicate by (createdAt + email), 1 per unique kiosk check-in
+    // Only count participant-metric rows or sentinel rows (metric_id null) to avoid
+    // overcounting from inconsistent emails across different metrics in the same check-in.
     const seenMonth = new Set<string>();
     (surveyResponses || []).forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       if (selectedYear !== "all") {
-        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        const yr = parseTs(r.createdAt).getFullYear();
         if (yr !== parseInt(selectedYear)) return;
       }
       const key = `${r.createdAt}|${r.email ?? ""}`;
       if (seenMonth.has(key)) return;
       seenMonth.add(key);
-      const month = new Date(r.createdAt + 'Z').getMonth();
+      const month = parseTs(r.createdAt).getMonth();
       monthCounts[month] = (monthCounts[month] || 0) + 1;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
@@ -344,12 +352,14 @@ export default function Reports() {
       return sum + total;
     }, 0);
     // Deduplicate survey responses by (createdAt + email) — 1 per unique kiosk check-in
+    // Only count participant-metric or sentinel rows to match server-side logic.
     const seen = new Set<string>();
     let surveyActual = 0;
     (surveyResponses || []).forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       if (selectedYear !== "all") {
-        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        const yr = parseTs(r.createdAt).getFullYear();
         if (yr !== parseInt(selectedYear)) return;
       }
       const key = `${r.createdAt}|${r.email ?? ""}`;
@@ -378,12 +388,14 @@ export default function Reports() {
       return sum + total;
     }, 0);
     // Deduplicate survey responses by (createdAt + email) — 1 per unique kiosk check-in
+    // Only count participant-metric or sentinel rows to match server-side logic.
     const seenImpact = new Set<string>();
     let surveyTotal = 0;
     (surveyResponses || []).forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       if (selectedYear !== "all") {
-        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        const yr = parseTs(r.createdAt).getFullYear();
         if (yr !== parseInt(selectedYear)) return;
       }
       const key = `${r.createdAt}|${r.email ?? ""}`;
@@ -406,14 +418,14 @@ export default function Reports() {
 
     const participantRows = (surveyResponses as any[]).filter((r: any) => r.respondentType === "participant");
     const yearFiltered = selectedYear === "all" ? participantRows : participantRows.filter((r: any) =>
-      new Date(r.createdAt + 'Z').getFullYear() === parseInt(selectedYear)
+      parseTs(r.createdAt).getFullYear() === parseInt(selectedYear)
     );
 
     const groups = new Map<string, { metricValues: Record<string, number>; date: string; demographics: string }>();
     yearFiltered.forEach((r: any) => {
       const key = r.createdAt as string;
       if (!groups.has(key)) {
-        const _d = new Date(r.createdAt + 'Z');
+        const _d = parseTs(r.createdAt);
         const date = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
         const demoParts: string[] = [];
         if (r.sex) demoParts.push(r.sex);

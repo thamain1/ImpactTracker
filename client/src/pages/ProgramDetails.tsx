@@ -181,11 +181,16 @@ export default function ProgramDetails() {
 
   // Total participants served: 1 per unique kiosk check-in (dedup by createdAt + email)
   // + manual entry participant metric values.
+  // Only count rows where the metric has countsAsParticipant=true (or metric_id is null
+  // for sentinel/no-allocation rows). This prevents overcounting when rows from the same
+  // check-in have inconsistent emails across different metrics.
   const totalParticipants = useMemo(() => {
     const seen = new Set<string>();
     let surveyCount = 0;
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      // Skip non-participant metrics — only count participant-metric or sentinel rows
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       const key = `${r.createdAt}|${r.email ?? ""}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -198,7 +203,7 @@ export default function ProgramDetails() {
       return sum + total;
     }, 0);
     return surveyCount + manualCount;
-  }, [yearFilteredSurveys, entries, participantMetricNames]);
+  }, [yearFilteredSurveys, entries, participantMetricNames, participantMetricIds]);
 
   if (progLoading || statsLoading) {
     return (
