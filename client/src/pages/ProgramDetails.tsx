@@ -427,51 +427,72 @@ export default function ProgramDetails() {
       )}
 
       {/* Budget Capacity */}
-      {(program as any).budget && program.metrics.some((m: any) => m.unitCost && m.unitCost > 0) && (
-        <div>
-          <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0).map((m: any) => {
-              const budget     = (program as any).budget as number;
-              const distributed = totalMetrics[m.name] || 0;
-              const spent      = distributed * m.unitCost;
-              const remaining  = Math.max(0, budget - spent);
-              const canAfford  = Math.floor(remaining / m.unitCost);
-              const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
+      {(program as any).budget && program.metrics.some((m: any) => m.unitCost && m.unitCost > 0) && (() => {
+        const budget = (program as any).budget as number;
+        const costedMetrics = program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0);
+        const totalSpent = costedMetrics.reduce((sum: number, m: any) =>
+          sum + (totalMetrics[m.name] || 0) * m.unitCost, 0);
+        const budgetRemaining = Math.max(0, budget - totalSpent);
+        const overBudget = totalSpent > budget;
 
-              const goalsText: string | null = (program as any).goals ?? null;
-              const goalMatch = goalsText?.match(/(\d[\d,]*)/);
-              const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
-              const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
-              const deliverableCapacity = inventory != null ? inventory : canAfford;
-              const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
-              const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
-              return (
-                <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
-                  <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
-                  <p className={`text-2xl font-bold mt-1${shortfall != null ? " text-red-700" : ""}`}>{canAfford.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">
-                    remaining units · ${remaining.toLocaleString()} of ${budget.toLocaleString()} budget left
+        return (
+          <div>
+            <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
+            <Card className={`p-4 mb-4${overBudget ? " border-red-200 bg-red-50/40" : ""}`}>
+              <div className="flex items-baseline justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Program Budget</p>
+                  <p className={`text-2xl font-bold mt-1${overBudget ? " text-red-700" : ""}`}>
+                    ${budgetRemaining.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">of ${budget.toLocaleString()} remaining</span>
                   </p>
-                  <p className="text-xs text-muted-foreground">
-                    {distributed.toLocaleString()} distributed · ${spent.toLocaleString()} spent at ${m.unitCost}/unit
-                  </p>
-                  {inventory != null && (
-                    <p className="text-xs text-muted-foreground">
-                      {inventory.toLocaleString()} physical units on hand
+                </div>
+                <p className={`text-sm font-semibold${overBudget ? " text-red-700" : ""}`}>
+                  ${totalSpent.toLocaleString()} spent
+                </p>
+              </div>
+              {overBudget && (
+                <p className="text-xs text-red-600 font-medium mt-2">
+                  Over budget by ${(totalSpent - budget).toLocaleString()}
+                </p>
+              )}
+            </Card>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {costedMetrics.map((m: any) => {
+                const distributed = totalMetrics[m.name] || 0;
+                const metricSpent = distributed * m.unitCost;
+                const canAfford  = Math.floor(budgetRemaining / m.unitCost);
+                const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
+
+                const goalsText: string | null = (program as any).goals ?? null;
+                const goalMatch = goalsText?.match(/(\d[\d,]*)/);
+                const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
+                const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
+                const deliverableCapacity = inventory != null ? inventory : canAfford;
+                const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
+                const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
+                return (
+                  <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
+                    <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {distributed.toLocaleString()} distributed · ${metricSpent.toLocaleString()} at ${m.unitCost}/unit
                     </p>
-                  )}
-                  {shortfall != null && (
-                    <p className="text-xs text-red-600 font-medium mt-2">
-                      {shortfall.toLocaleString()} units short of goal · ${dollarShortfall!.toLocaleString()} needed
-                    </p>
-                  )}
-                </Card>
-              );
-            })}
+                    {inventory != null && (
+                      <p className="text-xs text-muted-foreground">
+                        {inventory.toLocaleString()} physical units on hand
+                      </p>
+                    )}
+                    {shortfall != null && (
+                      <p className="text-xs text-red-600 font-medium mt-2">
+                        {shortfall.toLocaleString()} units short of goal · ${dollarShortfall!.toLocaleString()} needed
+                      </p>
+                    )}
+                  </Card>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <div className="grid lg:grid-cols-3 gap-8">
         {/* Chart Section */}
