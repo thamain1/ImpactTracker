@@ -332,7 +332,7 @@ export function generateImpactStudyPdf(data: ReportData) {
     doc.text(formatNumber(actual), startX + barW + gap + barW / 2, y + chartH + 10, { align: "center" });
 
     // Progress callout
-    const pct = ((actual / goal) * 100).toFixed(1);
+    const pct = goal > 0 ? ((actual / goal) * 100).toFixed(1) : "0.0";
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...COLORS.primary);

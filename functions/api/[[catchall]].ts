@@ -147,8 +147,8 @@ app.get("/health", (c) => {
 // ─── Auth middleware ──────────────────────────────────────────────────────────
 
 app.use("/api/*", async (c, next) => {
-  // Public survey endpoints — no auth required
-  if (c.req.path.startsWith("/api/survey/")) return next();
+  // Public endpoints — no auth required
+  if (c.req.path.startsWith("/api/survey/") || c.req.path === "/api/early-access") return next();
 
   const token = c.req.header("Authorization")?.replace("Bearer ", "");
   if (!token) return c.json({ message: "Unauthorized" }, 401);
