@@ -236,11 +236,13 @@ export default function ProgramDetails() {
   // Add survey quantities to matching metric KPI cards
   program.metrics.forEach((m: any) => {
     if (m.countsAsParticipant !== false) {
-      // Participant metrics: count unique check-ins (dedup by createdAt + email)
-      // so legacy check-ins missing the participant metric row are still counted.
+      // Participant metrics: count unique check-ins (dedup by createdAt + email).
+      // Only count rows where the metric has countsAsParticipant=true or metric_id
+      // is null (sentinel) to avoid overcounting from inconsistent emails.
       const seen = new Set<string>();
       yearFilteredSurveys.forEach((r: any) => {
         if (r.respondentType !== "participant") return;
+        if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
         seen.add(`${r.createdAt}|${r.email ?? ""}`);
       });
       if (totalMetrics[m.name] !== undefined) {
