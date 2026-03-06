@@ -662,17 +662,18 @@ app.post("/api/impact", async (c) => {
     if (metricNames.length > 0) {
       const { data: progMetrics } = await supabase
         .from("impact_metrics")
-        .select("id, name, item_type, inventory_remaining")
+        .select("id, name, item_type, inventory_total, inventory_remaining")
         .eq("program_id", input.programId)
         .in("name", metricNames);
       if (progMetrics) {
         for (const m of progMetrics) {
-          if (m.item_type === "physical_item" && m.inventory_remaining != null) {
+          const remaining = m.inventory_remaining ?? m.inventory_total;
+          if (m.item_type === "physical_item" && remaining != null) {
             const qty = mv[m.name] || 0;
             if (qty > 0) {
               await supabase
                 .from("impact_metrics")
-                .update({ inventory_remaining: Math.max(0, m.inventory_remaining - qty) })
+                .update({ inventory_remaining: Math.max(0, remaining - qty) })
                 .eq("id", m.id);
             }
           }
@@ -1581,17 +1582,18 @@ app.post("/api/survey/:programId/respond", async (c) => {
         const metricIds = [...new Set(allocations.map((a: any) => a.metricId as number))];
         const { data: metricRows } = await supabase
           .from("impact_metrics")
-          .select("id, item_type, counts_as_participant, inventory_remaining")
+          .select("id, item_type, counts_as_participant, inventory_total, inventory_remaining")
           .in("id", metricIds);
         const metricMap = new Map((metricRows ?? []).map((m: any) => [m.id, m]));
 
         // Deduct inventory for physical_item metrics
         for (const a of allocations) {
           const m = metricMap.get(a.metricId);
-          if (m?.item_type === "physical_item" && m?.inventory_remaining != null) {
+          const remaining = m?.inventory_remaining ?? m?.inventory_total;
+          if (m?.item_type === "physical_item" && remaining != null) {
             await supabase
               .from("impact_metrics")
-              .update({ inventory_remaining: Math.max(0, m.inventory_remaining - a.qty) })
+              .update({ inventory_remaining: Math.max(0, remaining - a.qty) })
               .eq("id", a.metricId);
           }
         }
