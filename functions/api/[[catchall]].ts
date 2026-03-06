@@ -177,11 +177,15 @@ async function getOrgsForUser(supabase: any, userId: string) {
 
 async function getProgramWithMetrics(supabase: any, programId: number) {
   const { data: prog } = await supabase
-    .from("programs").select("*").eq("id", programId).maybeSingle();
+    .from("programs").select("*, updater:users!programs_updated_by_fkey(first_name, last_name, email)").eq("id", programId).maybeSingle();
   if (!prog) return null;
   const { data: metrics } = await supabase
     .from("impact_metrics").select("*").eq("program_id", programId);
-  return { ...toCamel(prog), metrics: (metrics || []).map((m: any) => toCamel(m)) };
+  const u = prog.updater;
+  const updatedByName = u ? [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email?.split("@")[0] || null : null;
+  const result = toCamel(prog);
+  delete result.updater;
+  return { ...result, updatedByName, metrics: (metrics || []).map((m: any) => toCamel(m)) };
 }
 
 async function getProgramsForOrg(supabase: any, orgId: number) {
@@ -490,8 +494,9 @@ app.put("/api/programs/:id", async (c) => {
   try {
     const body = await c.req.json();
     const input = programUpdateSchema.parse(body);
+    const updateData = { ...toSnake(input), updated_at: new Date().toISOString(), updated_by: user.id };
     const { data: prog } = await supabase
-      .from("programs").update(toSnake(input)).eq("id", programId).select().single();
+      .from("programs").update(updateData).eq("id", programId).select("*, users!programs_updated_by_fkey(first_name, last_name, email)").single();
     if (!prog) return c.json({ message: "Program not found" }, 404);
     return c.json(toCamel(prog));
   } catch (err) {

@@ -696,11 +696,18 @@ export default function ProgramDetails() {
                 {(() => {
                   const entryDate = entries?.[0]?.createdAt ? parseTs(entries[0].createdAt) : null;
                   const surveyDate = surveyResponses?.[0]?.createdAt ? parseTs(surveyResponses[0].createdAt) : null;
-                  const latestIsEntry = !surveyDate || (entryDate && entryDate >= surveyDate);
-                  const latestDate = latestIsEntry ? entryDate : surveyDate;
-                  const updatedBy = latestIsEntry
-                    ? (entries?.[0] as any)?.entryUserName || null
-                    : null;
+                  const progEditDate = (program as any).updatedAt ? parseTs((program as any).updatedAt) : null;
+
+                  // Find the most recent of: entry, survey, program edit
+                  const candidates = [
+                    { date: entryDate, name: (entries?.[0] as any)?.entryUserName || null },
+                    { date: surveyDate, name: null },
+                    { date: progEditDate, name: (program as any).updatedByName || null },
+                  ].filter((c) => c.date != null);
+                  candidates.sort((a, b) => b.date!.getTime() - a.date!.getTime());
+
+                  const latestDate = candidates[0]?.date || null;
+                  const updatedBy = candidates[0]?.name || null;
                   return (
                     <>
                       <div>
