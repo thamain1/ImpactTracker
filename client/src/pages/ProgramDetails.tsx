@@ -130,10 +130,11 @@ export default function ProgramDetails() {
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
     // Survey responses — each unique check-in (dedup by createdAt + email) counts as 1 participant.
-    // This correctly handles legacy check-ins that may lack a countsAsParticipant metric row.
+    // Only count participant-metric or sentinel rows to stay consistent with totalParticipants.
     const seenMonth = new Set<string>();
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       const key = `${r.createdAt}|${r.email ?? ""}`;
       if (seenMonth.has(key)) return;
       seenMonth.add(key);
@@ -141,16 +142,17 @@ export default function ProgramDetails() {
       monthCounts[month] = (monthCounts[month] || 0) + 1;
     });
     return monthNames.map((name, i) => ({ month: name, count: monthCounts[i] || 0 }));
-  }, [entries, participantMetricNames, yearFilteredSurveys]);
+  }, [entries, participantMetricNames, yearFilteredSurveys, participantMetricIds]);
 
   // Group survey responses by date for the Recent Entries table — one participant per unique
-  // check-in (dedup by createdAt + email) so legacy check-ins without participant metric rows
-  // are still counted.
+  // check-in (dedup by createdAt + email). Only count participant-metric or sentinel rows
+  // to stay consistent with totalParticipants and totalMetrics.
   const surveyEntriesByDate = useMemo(() => {
     const groups: Record<string, number> = {};
     const seen = new Set<string>();
     yearFilteredSurveys.forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       const key = `${r.createdAt}|${r.email ?? ""}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -159,7 +161,7 @@ export default function ProgramDetails() {
       groups[date] = (groups[date] || 0) + 1;
     });
     return groups;
-  }, [yearFilteredSurveys]);
+  }, [yearFilteredSurveys, participantMetricIds]);
 
   // Non-participant metric quantities from surveys grouped by local date, e.g. Diaper Kits.
   // Used to display these alongside the participant count in the Recent Entries survey rows.
