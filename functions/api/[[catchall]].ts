@@ -1181,12 +1181,49 @@ app.get("/api/admin/stats", async (c) => {
     const mv = entry.metricValues as Record<string, number>;
     Object.entries(mv).forEach(([k, v]) => { geoAgg[level].metrics[k] = (geoAgg[level].metrics[k] || 0) + Number(v); });
   });
+
+  // Include survey_responses in statewide metric totals
+  if (programIds.size > 0) {
+    const { data: survRows } = await supabase
+      .from("survey_responses")
+      .select("metric_id, quantity_delivered, created_at, email, impact_metrics!inner(name, counts_as_participant)")
+      .in("program_id", [...programIds])
+      .eq("respondent_type", "participant");
+    if (survRows && survRows.length > 0) {
+      // Build participant metric ids for dedup
+      const participantMetricIds = new Set<number>();
+      survRows.forEach((r: any) => {
+        const m = r.impact_metrics as any;
+        if (m?.counts_as_participant) participantMetricIds.add(r.metric_id);
+      });
+      // Dedup participant metrics by (created_at|email), sum others normally
+      const participantSeen = new Set<string>();
+      const surveyMetrics: Record<string, number> = {};
+      survRows.forEach((r: any) => {
+        const m = r.impact_metrics as any;
+        if (!m?.name) return;
+        if (participantMetricIds.has(r.metric_id)) {
+          const key = `${r.created_at}|${r.email ?? ""}`;
+          if (participantSeen.has(key)) return;
+          participantSeen.add(key);
+          surveyMetrics[m.name] = (surveyMetrics[m.name] || 0) + 1;
+        } else {
+          surveyMetrics[m.name] = (surveyMetrics[m.name] || 0) + Number(r.quantity_delivered || 0);
+        }
+      });
+      if (!geoAgg["Survey"]) geoAgg["Survey"] = { count: 0, metrics: {} };
+      geoAgg["Survey"].count += participantSeen.size;
+      Object.entries(surveyMetrics).forEach(([k, v]) => {
+        geoAgg["Survey"].metrics[k] = (geoAgg["Survey"].metrics[k] || 0) + v;
+      });
+    }
+  }
+
   const byGeography = Object.entries(geoAgg).map(([level, data]) => ({
     geographyLevel: level, count: data.count, totalMetrics: data.metrics,
   }));
   const recentPrograms = allPrograms
-    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
-    .slice(0, 5);
+    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
   return c.json({ totalOrganizations: userOrgs.length, totalPrograms: allPrograms.length, totalEntries: allEntries.length, byGeography, recentPrograms });
 });
 
