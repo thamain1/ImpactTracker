@@ -846,17 +846,18 @@ app.get("/api/impact/export", async (c) => {
     .from("impact_entries").select("*").eq("program_id", programId).order("created_at", { ascending: false });
   const entries = (entryRows || []).map((e: any) => toCamel(e));
   const metricNames = (prog as any).metrics.map((m: any) => m.name);
-  const header = ["Date", "Source", "Geography Level", "Geography Value", "ZIP Code", "Demographics", "Outcomes", ...metricNames].join(",");
+  const header = ["Date", "Source", "Geography Level", "Geography Value", "ZIP Code", "Email", "Sex", "Age Range", "Family Size", "Household Income", "Demographics", "Outcomes", ...metricNames].join(",");
+  const csvEscape = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
   const rows = entries.map((entry: any) => {
     const mv = entry.metricValues as Record<string, number>;
     const metricCols = metricNames.map((n: string) => mv[n] || 0);
-    return [entry.date, "Manual", entry.geographyLevel, `"${entry.geographyValue}"`, entry.zipCode || "", `"${entry.demographics || ""}"`, `"${entry.outcomes || ""}"`, ...metricCols].join(",");
+    return [entry.date, "Manual", entry.geographyLevel, csvEscape(entry.geographyValue), entry.zipCode || "", "", "", "", "", "", csvEscape(entry.demographics || ""), csvEscape(entry.outcomes || ""), ...metricCols].join(",");
   });
 
   // Append survey_responses as individual check-in rows
   const { data: surveyRows } = await supabase
     .from("survey_responses")
-    .select("metric_id, quantity_delivered, created_at")
+    .select("metric_id, quantity_delivered, created_at, email, sex, age_range, family_size, household_income")
     .eq("program_id", programId)
     .eq("respondent_type", "participant")
     .order("created_at", { ascending: false });
@@ -870,24 +871,40 @@ app.get("/api/impact/export", async (c) => {
       (prog as any).metrics[0]?.name || "";
 
     // Group rows by created_at timestamp (same timestamp = same check-in)
-    const checkIns = new Map<string, Record<string, number>>();
+    // Capture demographics from the first row of each check-in
+    const checkIns = new Map<string, { mv: Record<string, number>; email: string; sex: string; ageRange: string; familySize: string; householdIncome: string }>();
     surveyRows.forEach((row: any) => {
       const key = row.created_at as string;
-      if (!checkIns.has(key)) checkIns.set(key, {});
-      const mv = checkIns.get(key)!;
+      if (!checkIns.has(key)) {
+        checkIns.set(key, {
+          mv: {},
+          email: row.email || "",
+          sex: row.sex || "",
+          ageRange: row.age_range || "",
+          familySize: row.family_size != null ? String(row.family_size) : "",
+          householdIncome: row.household_income || "",
+        });
+      }
+      const ci = checkIns.get(key)!;
+      // Capture email/demographics from whichever row has them
+      if (!ci.email && row.email) ci.email = row.email;
+      if (!ci.sex && row.sex) ci.sex = row.sex;
+      if (!ci.ageRange && row.age_range) ci.ageRange = row.age_range;
+      if (!ci.familySize && row.family_size != null) ci.familySize = String(row.family_size);
+      if (!ci.householdIncome && row.household_income) ci.householdIncome = row.household_income;
+
       if (row.metric_id && metricIdToName[row.metric_id]) {
         const name = metricIdToName[row.metric_id];
-        mv[name] = (mv[name] || 0) + (row.quantity_delivered ?? 1);
+        ci.mv[name] = (ci.mv[name] || 0) + (row.quantity_delivered ?? 1);
       } else if (!row.metric_id && primaryMetricName) {
-        // Legacy row without metric_id — count 1 for the primary participant metric
-        mv[primaryMetricName] = (mv[primaryMetricName] || 0) + 1;
+        ci.mv[primaryMetricName] = (ci.mv[primaryMetricName] || 0) + 1;
       }
     });
 
-    checkIns.forEach((mv, createdAt) => {
+    checkIns.forEach((ci, createdAt) => {
       const date = (createdAt as string).split("T")[0];
-      const metricCols = metricNames.map((n: string) => mv[n] || 0);
-      rows.push([date, "Survey", "Survey", '"Kiosk Check-in"', "", '""', '""', ...metricCols].join(","));
+      const metricCols = metricNames.map((n: string) => ci.mv[n] || 0);
+      rows.push([date, "Survey", "Survey", '"Kiosk Check-in"', "", csvEscape(ci.email), ci.sex, ci.ageRange, ci.familySize, ci.householdIncome, "", "", ...metricCols].join(","));
     });
   }
 
