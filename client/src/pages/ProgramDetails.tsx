@@ -448,62 +448,79 @@ export default function ProgramDetails() {
         const budgetRemaining = Math.max(0, budget - totalSpent);
         const overBudget = totalSpent > budget;
 
+        const pctUsed = Math.min(100, Math.round((totalSpent / budget) * 100));
         return (
           <div>
             <h3 className="text-sm font-semibold mb-3">Budget Capacity</h3>
-            <Card className={`p-4 mb-4${overBudget ? " border-red-200 bg-red-50/40" : ""}`}>
-              <div className="flex items-baseline justify-between">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Program Budget</p>
-                  <p className={`text-2xl font-bold mt-1${overBudget ? " text-red-700" : ""}`}>
-                    ${budgetRemaining.toLocaleString()} <span className="text-sm font-normal text-muted-foreground">of ${budget.toLocaleString()} remaining</span>
-                  </p>
-                </div>
-                <p className={`text-sm font-semibold${overBudget ? " text-red-700" : ""}`}>
-                  ${totalSpent.toLocaleString()} spent
+            <Card className={`p-5${overBudget ? " border-red-200 bg-red-50/40" : ""}`}>
+              {/* Summary header */}
+              <div className="flex items-baseline justify-between mb-1">
+                <p className="text-sm font-medium text-muted-foreground">Program Budget</p>
+                <p className={`text-xs font-medium${overBudget ? " text-red-600" : " text-muted-foreground"}`}>
+                  {pctUsed}% used
                 </p>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <p className={`text-2xl font-bold${overBudget ? " text-red-700" : ""}`}>
+                  ${budgetRemaining.toLocaleString()}
+                  <span className="text-sm font-normal text-muted-foreground ml-1">remaining</span>
+                </p>
+                <p className={`text-sm font-semibold${overBudget ? " text-red-700" : ""}`}>
+                  ${totalSpent.toLocaleString()} <span className="font-normal text-muted-foreground">of ${budget.toLocaleString()}</span>
+                </p>
+              </div>
+              {/* Progress bar */}
+              <div className="mt-3 h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${overBudget ? "bg-red-500" : pctUsed > 75 ? "bg-amber-500" : "bg-primary"}`}
+                  style={{ width: `${Math.min(pctUsed, 100)}%` }}
+                />
               </div>
               {overBudget && (
                 <p className="text-xs text-red-600 font-medium mt-2">
                   Over budget by ${(totalSpent - budget).toLocaleString()}
                 </p>
               )}
-            </Card>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {costedMetrics.map((m: any) => {
-                const cpu = costPerUnit(m);
-                const distributed = totalMetrics[m.name] || 0;
-                const metricSpent = distributed * cpu;
-                const canAfford  = Math.floor(budgetRemaining / cpu);
-                const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
+              {/* Metric breakdown rows */}
+              <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+                {costedMetrics.map((m: any) => {
+                  const cpu = costPerUnit(m);
+                  const distributed = totalMetrics[m.name] || 0;
+                  const metricSpent = distributed * cpu;
+                  const metricPct = budget > 0 ? Math.round((metricSpent / budget) * 100) : 0;
+                  const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
+                  const canAfford  = Math.floor(budgetRemaining / cpu);
 
-                const goalsText: string | null = (program as any).goals ?? null;
-                const goalMatch = goalsText?.match(/(\d[\d,]*)/);
-                const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
-                const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
-                const deliverableCapacity = inventory != null ? inventory : canAfford;
-                const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
-                const dollarShortfall = shortfall != null ? shortfall * cpu : null;
-                return (
-                  <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
-                    <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {distributed.toLocaleString()} delivered · ${metricSpent.toLocaleString()} spent ({costLabel(m)})
-                    </p>
-                    {inventory != null && (
-                      <p className="text-xs text-muted-foreground">
-                        {inventory.toLocaleString()} physical units on hand
-                      </p>
-                    )}
-                    {shortfall != null && (
-                      <p className="text-xs text-red-600 font-medium mt-2">
-                        {shortfall.toLocaleString()} units short of goal · ${dollarShortfall!.toLocaleString()} needed
-                      </p>
-                    )}
-                  </Card>
-                );
-              })}
-            </div>
+                  const goalsText: string | null = (program as any).goals ?? null;
+                  const goalMatch = goalsText?.match(/(\d[\d,]*)/);
+                  const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
+                  const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
+                  const deliverableCapacity = inventory != null ? inventory : canAfford;
+                  const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
+                  const dollarShortfall = shortfall != null ? shortfall * cpu : null;
+                  return (
+                    <div key={m.id} className={`flex items-start justify-between gap-4 p-3 rounded-lg${shortfall != null ? " bg-red-50 border border-red-200" : " bg-slate-50"}`}>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-semibold${shortfall != null ? " text-red-700" : " text-slate-800"}`}>{m.name}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {distributed.toLocaleString()} delivered · {costLabel(m)}
+                          {inventory != null && ` · ${inventory.toLocaleString()} on hand`}
+                        </p>
+                        {shortfall != null && (
+                          <p className="text-xs text-red-600 font-medium mt-1">
+                            {shortfall.toLocaleString()} short of goal · ${dollarShortfall!.toLocaleString()} needed
+                          </p>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className={`text-sm font-bold${shortfall != null ? " text-red-700" : " text-slate-900"}`}>${metricSpent.toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">{metricPct}% of budget</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
           </div>
         );
       })()}
