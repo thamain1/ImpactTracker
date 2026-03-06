@@ -221,9 +221,12 @@ export default function Reports() {
       selectedProgram?.metrics[0]?.name;
 
     if (primaryMetric) {
+      const seenGeo = new Set<string>();
       filteredSurveys?.forEach((resp: any) => {
         if (resp.respondentType !== "participant") return;
-        if (resp.metricId != null && !participantMetricIds.has(resp.metricId)) return;
+        const key = `${resp.createdAt}|${resp.email ?? ""}`;
+        if (seenGeo.has(key)) return;
+        seenGeo.add(key);
         const mv = { [primaryMetric]: 1 };
         if (orgGeoContext?.spa)    addToAgg("SPA",    orgGeoContext.spa,    mv);
         if (orgGeoContext?.city)   addToAgg("City",   orgGeoContext.city,   mv);
@@ -310,14 +313,17 @@ export default function Reports() {
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       monthCounts[month] = (monthCounts[month] || 0) + total;
     });
-    // Survey responses — 1 per check-in for participant metrics only
+    // Survey responses — deduplicate by (createdAt + email), 1 per unique kiosk check-in
+    const seenMonth = new Set<string>();
     (surveyResponses || []).forEach((r: any) => {
       if (r.respondentType !== "participant") return;
-      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return;
       if (selectedYear !== "all") {
         const yr = new Date(r.createdAt + 'Z').getFullYear();
         if (yr !== parseInt(selectedYear)) return;
       }
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seenMonth.has(key)) return;
+      seenMonth.add(key);
       const month = new Date(r.createdAt + 'Z').getMonth();
       monthCounts[month] = (monthCounts[month] || 0) + 1;
     });
@@ -337,15 +343,20 @@ export default function Reports() {
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       return sum + total;
     }, 0);
-    const surveyActual = (surveyResponses || []).filter((r: any) => {
-      if (r.respondentType !== "participant") return false;
-      if (r.metricId != null && !participantMetricIds.has(r.metricId)) return false;
+    // Deduplicate survey responses by (createdAt + email) — 1 per unique kiosk check-in
+    const seen = new Set<string>();
+    let surveyActual = 0;
+    (surveyResponses || []).forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
       if (selectedYear !== "all") {
         const yr = new Date(r.createdAt + 'Z').getFullYear();
-        if (yr !== parseInt(selectedYear)) return false;
+        if (yr !== parseInt(selectedYear)) return;
       }
-      return true;
-    }).length;
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      surveyActual++;
+    });
     return { goalTarget, actual: entryActual + surveyActual, goals: selectedProgram.goals };
   }, [selectedProgram, entries, participantMetricNames, surveyResponses, participantMetricIds, selectedYear]);
 
@@ -366,12 +377,18 @@ export default function Reports() {
       participantMetricNames.forEach(name => { total += Number(mv[name] || 0); });
       return sum + total;
     }, 0);
-    const surveyTotal = (surveyResponses || []).filter((r: any) =>
-      r.respondentType === "participant" &&
-      (r.metricId == null || participantMetricIds.has(r.metricId))
-    ).length;
+    // Deduplicate survey responses by (createdAt + email) — 1 per unique kiosk check-in
+    const seenImpact = new Set<string>();
+    let surveyTotal = 0;
+    (surveyResponses || []).forEach((r: any) => {
+      if (r.respondentType !== "participant") return;
+      const key = `${r.createdAt}|${r.email ?? ""}`;
+      if (seenImpact.has(key)) return;
+      seenImpact.add(key);
+      surveyTotal++;
+    });
     return entryTotal + surveyTotal;
-  }, [entries, participantMetricNames, surveyResponses, participantMetricIds]);
+  }, [entries, participantMetricNames, surveyResponses]);
 
   // Survey check-ins for the Raw Data tab — one row per unique check-in (grouped by createdAt),
   // with all metric quantities aggregated and demographics captured from the first row.
@@ -971,7 +988,7 @@ export default function Reports() {
                     {cppRaw && (
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cost Per Participant</p>
-                        <p className="text-2xl font-heading font-bold text-slate-900">{cppRaw}</p>
+                        <p className="text-2xl font-heading font-bold text-slate-900">{hasCpp ? `$${cppNum.toLocaleString()}` : cppRaw}</p>
                         <p className="text-xs text-muted-foreground">Stated rate</p>
                       </div>
                     )}
@@ -979,7 +996,7 @@ export default function Reports() {
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Effective CPP</p>
                         <p className="text-2xl font-heading font-bold text-emerald-600">
-                          ${effectiveCpp.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                          ${effectiveCpp.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                         <p className="text-xs text-muted-foreground">Budget ÷ {totalImpact.toLocaleString()} served</p>
                       </div>
