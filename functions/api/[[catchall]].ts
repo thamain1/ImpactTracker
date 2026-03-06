@@ -848,6 +848,7 @@ app.get("/api/impact/export", async (c) => {
   const metricNames = (prog as any).metrics.map((m: any) => m.name);
   const header = ["Date", "Source", "Geography Level", "Geography Value", "ZIP Code", "Email", "Sex", "Age Range", "Family Size", "Household Income", "Demographics", "Outcomes", ...metricNames].join(",");
   const csvEscape = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
+  const csvText = (v: string) => v ? `="'${(v || "").replace(/"/g, '""')}"` : "";
   const rows = entries.map((entry: any) => {
     const mv = entry.metricValues as Record<string, number>;
     const metricCols = metricNames.map((n: string) => mv[n] || 0);
@@ -904,7 +905,7 @@ app.get("/api/impact/export", async (c) => {
     checkIns.forEach((ci, createdAt) => {
       const date = (createdAt as string).split("T")[0];
       const metricCols = metricNames.map((n: string) => ci.mv[n] || 0);
-      rows.push([date, "Survey", "Survey", '"Kiosk Check-in"', "", csvEscape(ci.email), csvEscape(ci.sex), csvEscape(ci.ageRange), csvEscape(ci.familySize), csvEscape(ci.householdIncome), "", "", ...metricCols].join(","));
+      rows.push([date, "Survey", "Survey", '"Kiosk Check-in"', "", csvEscape(ci.email), csvText(ci.sex), csvText(ci.ageRange), csvText(ci.familySize), csvText(ci.householdIncome), "", "", ...metricCols].join(","));
     });
   }
 
