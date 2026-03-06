@@ -434,7 +434,7 @@ export default function ProgramDetails() {
             {program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0).map((m: any) => {
               const budget     = (program as any).budget as number;
               const budgetUnits = Math.floor(budget / m.unitCost);
-              const inventory   = m.inventoryTotal ?? null;
+              const inventory   = m.inventoryRemaining ?? m.inventoryTotal ?? null;
               const effectiveCapacity = inventory != null
                 ? Math.max(budgetUnits, inventory)
                 : budgetUnits;
