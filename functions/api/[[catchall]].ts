@@ -792,7 +792,7 @@ app.get("/api/impact/stats", async (c) => {
   if (fallbackGeo) {
     const { data: surveyRows } = await supabase
       .from("survey_responses")
-      .select("metric_id, quantity_delivered, impact_metrics(name, counts_as_participant)")
+      .select("created_at, email, metric_id, quantity_delivered, impact_metrics(name, counts_as_participant)")
       .eq("program_id", programId)
       .eq("respondent_type", "participant");
 
@@ -802,14 +802,18 @@ app.get("/api/impact/stats", async (c) => {
       const participantMetrics = (metricsRows || []).filter((m: any) => m.counts_as_participant !== false);
       const primaryMetric = participantMetrics[0]?.name || (metricsRows || [])[0]?.name;
 
+      // Deduplicate by (created_at + email) — one kiosk check-in creates multiple
+      // survey_response rows (one per metric), but counts as 1 participant.
+      const seen = new Set<string>();
       surveyRows.forEach((row: any) => {
         const metric = row.impact_metrics as any;
-        // Skip rows for non-participant metrics (e.g. physical items that don't count as people)
         if (metric && metric.counts_as_participant === false) return;
         const metricName = metric?.name ?? primaryMetric;
         if (!metricName) return;
-        const qty = row.quantity_delivered ?? 1;
-        const mv = { [metricName]: qty };
+        const key = `${row.created_at}|${row.email ?? ""}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const mv = { [metricName]: 1 };
         if (fallbackGeo!.spa)    addToAggregation("SPA",    fallbackGeo!.spa,    mv);
         if (fallbackGeo!.city)   addToAggregation("City",   fallbackGeo!.city,   mv);
         if (fallbackGeo!.county) addToAggregation("County", fallbackGeo!.county, mv);

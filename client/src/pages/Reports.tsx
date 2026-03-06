@@ -382,13 +382,17 @@ export default function Reports() {
     let surveyTotal = 0;
     (surveyResponses || []).forEach((r: any) => {
       if (r.respondentType !== "participant") return;
+      if (selectedYear !== "all") {
+        const yr = new Date(r.createdAt + 'Z').getFullYear();
+        if (yr !== parseInt(selectedYear)) return;
+      }
       const key = `${r.createdAt}|${r.email ?? ""}`;
       if (seenImpact.has(key)) return;
       seenImpact.add(key);
       surveyTotal++;
     });
     return entryTotal + surveyTotal;
-  }, [entries, participantMetricNames, surveyResponses]);
+  }, [entries, participantMetricNames, surveyResponses, selectedYear]);
 
   // Survey check-ins for the Raw Data tab — one row per unique check-in (grouped by createdAt),
   // with all metric quantities aggregated and demographics captured from the first row.
