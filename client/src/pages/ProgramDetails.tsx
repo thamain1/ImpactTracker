@@ -427,11 +427,24 @@ export default function ProgramDetails() {
       )}
 
       {/* Budget Capacity */}
-      {(program as any).budget && program.metrics.some((m: any) => m.unitCost && m.unitCost > 0) && (() => {
+      {(program as any).budget && (() => {
         const budget = (program as any).budget as number;
-        const costedMetrics = program.metrics.filter((m: any) => m.unitCost && m.unitCost > 0);
+        // Effective cost per unit: physical items use unitCost, services use hourlyCost × hoursCount
+        const costPerUnit = (m: any): number => {
+          if (m.unitCost && m.unitCost > 0) return m.unitCost;
+          if (m.hourlyCost && m.hourlyCost > 0 && m.hoursCount && m.hoursCount > 0) return m.hourlyCost * m.hoursCount;
+          return 0;
+        };
+        const costLabel = (m: any): string => {
+          if (m.unitCost && m.unitCost > 0) return `$${m.unitCost}/unit`;
+          if (m.hourlyCost && m.hourlyCost > 0 && m.hoursCount && m.hoursCount > 0)
+            return `$${m.hourlyCost}/hr × ${m.hoursCount}hrs`;
+          return "";
+        };
+        const costedMetrics = program.metrics.filter((m: any) => costPerUnit(m) > 0);
+        if (costedMetrics.length === 0) return null;
         const totalSpent = costedMetrics.reduce((sum: number, m: any) =>
-          sum + (totalMetrics[m.name] || 0) * m.unitCost, 0);
+          sum + (totalMetrics[m.name] || 0) * costPerUnit(m), 0);
         const budgetRemaining = Math.max(0, budget - totalSpent);
         const overBudget = totalSpent > budget;
 
@@ -458,9 +471,10 @@ export default function ProgramDetails() {
             </Card>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               {costedMetrics.map((m: any) => {
+                const cpu = costPerUnit(m);
                 const distributed = totalMetrics[m.name] || 0;
-                const metricSpent = distributed * m.unitCost;
-                const canAfford  = Math.floor(budgetRemaining / m.unitCost);
+                const metricSpent = distributed * cpu;
+                const canAfford  = Math.floor(budgetRemaining / cpu);
                 const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
 
                 const goalsText: string | null = (program as any).goals ?? null;
@@ -469,12 +483,12 @@ export default function ProgramDetails() {
                 const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
                 const deliverableCapacity = inventory != null ? inventory : canAfford;
                 const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
-                const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
+                const dollarShortfall = shortfall != null ? shortfall * cpu : null;
                 return (
                   <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
                     <p className={`text-sm font-medium${shortfall != null ? " text-red-700" : ""}`}>{m.name}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {distributed.toLocaleString()} distributed · ${metricSpent.toLocaleString()} at ${m.unitCost}/unit
+                      {distributed.toLocaleString()} delivered · ${metricSpent.toLocaleString()} spent ({costLabel(m)})
                     </p>
                     {inventory != null && (
                       <p className="text-xs text-muted-foreground">
