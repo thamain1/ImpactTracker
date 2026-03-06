@@ -507,10 +507,11 @@ export default function Reports() {
         return { geography: `${s.geographyValue} (${s.geographyLevel})`, value: total };
       }).filter((g: any) => g.value > 0).slice(0, 15);
 
-      // Compute reach percent from census data if available
+      // Compute reach percent from census data — use survey-inclusive participant count
       const totalCensusPop = (censusData || []).reduce((sum: number, c: any) => sum + (c.totalPopulation || 0), 0);
-      const reachPercent = totalCensusPop > 0 && totalPrimary > 0
-        ? Math.round((totalPrimary / totalCensusPop) * 10000) / 100
+      const pdfParticipantTotal = goalData?.actual ?? totalPrimary;
+      const reachPercent = totalCensusPop > 0 && pdfParticipantTotal > 0
+        ? Math.round((pdfParticipantTotal / totalCensusPop) * 10000) / 100
         : null;
 
       // Extract numeric goal target
@@ -629,8 +630,9 @@ export default function Reports() {
         return { geography: `${s.geographyValue} (${s.geographyLevel})`, value: total };
       }).filter((g: any) => g.value > 0).slice(0, 15);
       const totalCensusPop = (censusData || []).reduce((sum: number, c: any) => sum + (c.totalPopulation || 0), 0);
-      const reachPercent = totalCensusPop > 0 && totalPrimary > 0
-        ? Math.round((totalPrimary / totalCensusPop) * 10000) / 100
+      const actualParticipants = goalData?.actual ?? totalPrimary;
+      const reachPercent = totalCensusPop > 0 && actualParticipants > 0
+        ? Math.round((actualParticipants / totalCensusPop) * 10000) / 100
         : null;
       let goalTarget: number | null = null;
       if (selectedProgram.goals) {
