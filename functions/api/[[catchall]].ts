@@ -606,10 +606,18 @@ app.get("/api/impact", async (c) => {
   if (!(await userOwnsProgram(supabase, user.id, programId))) return c.json({ message: "Not authorized" }, 403);
 
   const geoLevel = c.req.query("geographyLevel");
-  let query = supabase.from("impact_entries").select("*").eq("program_id", programId).order("created_at", { ascending: false });
+  let query = supabase.from("impact_entries").select("*, users(first_name, last_name, email)").eq("program_id", programId).order("created_at", { ascending: false });
   if (geoLevel) query = query.eq("geography_level", geoLevel);
   const { data: entries } = await query;
-  return c.json((entries || []).map((e: any) => toCamel(e)));
+  return c.json((entries || []).map((e: any) => {
+    const u = e.users;
+    const result = toCamel(e);
+    if (u) {
+      result.entryUserName = [u.first_name, u.last_name].filter(Boolean).join(" ") || u.email?.split("@")[0] || null;
+    }
+    delete result.users;
+    return result;
+  }));
 });
 
 app.get("/api/zipcode/:zip", async (c) => {
@@ -647,6 +655,31 @@ app.post("/api/impact", async (c) => {
     };
     const { data: entry, error } = await supabase.from("impact_entries").insert(row).select().single();
     if (error) throw error;
+
+    // Deduct inventory for physical_item metrics
+    const mv = input.metricValues as Record<string, number>;
+    const metricNames = Object.keys(mv).filter((k) => mv[k] > 0);
+    if (metricNames.length > 0) {
+      const { data: progMetrics } = await supabase
+        .from("impact_metrics")
+        .select("id, name, item_type, inventory_remaining")
+        .eq("program_id", input.programId)
+        .in("name", metricNames);
+      if (progMetrics) {
+        for (const m of progMetrics) {
+          if (m.item_type === "physical_item" && m.inventory_remaining != null) {
+            const qty = mv[m.name] || 0;
+            if (qty > 0) {
+              await supabase
+                .from("impact_metrics")
+                .update({ inventory_remaining: Math.max(0, m.inventory_remaining - qty) })
+                .eq("id", m.id);
+            }
+          }
+        }
+      }
+    }
+
     return c.json(toCamel(entry), 201);
   } catch (err) {
     if (err instanceof z.ZodError) return c.json({ message: err.errors[0].message }, 400);

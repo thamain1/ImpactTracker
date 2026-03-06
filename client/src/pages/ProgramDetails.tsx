@@ -654,18 +654,31 @@ export default function ProgramDetails() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div>
-                  <div className="text-sm opacity-80 mb-1">Last Updated</div>
-                  <div className="font-bold text-xl" data-testid="text-last-updated">
-                    {entries?.[0] ? format(parseTs(entries[0].createdAt!), 'MMM d, yyyy') : 'Never'}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm opacity-80 mb-1">Updated By</div>
-                  <div className="font-bold text-xl" data-testid="text-updated-by">
-                    {user ? `${(user.user_metadata?.first_name as string) || ''} ${(user.user_metadata?.last_name as string) || ''}`.trim() || user.email?.split("@")[0] || 'Unknown' : 'Unknown'}
-                  </div>
-                </div>
+                {(() => {
+                  const entryDate = entries?.[0]?.createdAt ? parseTs(entries[0].createdAt) : null;
+                  const surveyDate = surveyResponses?.[0]?.createdAt ? parseTs(surveyResponses[0].createdAt) : null;
+                  const latestIsEntry = !surveyDate || (entryDate && entryDate >= surveyDate);
+                  const latestDate = latestIsEntry ? entryDate : surveyDate;
+                  const updatedBy = latestIsEntry
+                    ? (entries?.[0] as any)?.entryUserName || null
+                    : null;
+                  return (
+                    <>
+                      <div>
+                        <div className="text-sm opacity-80 mb-1">Last Updated</div>
+                        <div className="font-bold text-xl" data-testid="text-last-updated">
+                          {latestDate ? format(latestDate, 'MMM d, yyyy') : 'Never'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm opacity-80 mb-1">Updated By</div>
+                        <div className="font-bold text-xl" data-testid="text-updated-by">
+                          {updatedBy || (user ? `${(user.user_metadata?.first_name as string) || ''} ${(user.user_metadata?.last_name as string) || ''}`.trim() || user.email?.split("@")[0] || 'Unknown' : 'Unknown')}
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
                 {program.startDate && (
                   <div>
                     <div className="text-sm opacity-80 mb-1 flex items-center gap-1">
