@@ -442,7 +442,9 @@ export default function ProgramDetails() {
               const goalsText: string | null = (program as any).goals ?? null;
               const goalMatch = goalsText?.match(/(\d[\d,]*)/);
               const goalTarget = goalMatch ? parseInt(goalMatch[1].replace(/,/g, ""), 10) : null;
-              const shortfall = goalTarget != null && canAfford < (goalTarget - distributed) ? (goalTarget - distributed) - canAfford : null;
+              const remainingNeeded = goalTarget != null ? goalTarget - distributed : null;
+              const deliverableCapacity = inventory != null ? inventory : canAfford;
+              const shortfall = remainingNeeded != null && deliverableCapacity < remainingNeeded ? remainingNeeded - deliverableCapacity : null;
               const dollarShortfall = shortfall != null ? shortfall * m.unitCost : null;
               return (
                 <Card key={m.id} className={`p-4${shortfall != null ? " border-red-200 bg-red-50/40" : ""}`}>
