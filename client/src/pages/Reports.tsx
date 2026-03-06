@@ -494,6 +494,32 @@ export default function Reports() {
           sum + (ci.metricValues[m.name] || 0), 0);
         metricTotals[m.name] = entryTotal + surveyTotal;
       });
+      // Compute run-rate projection
+      const actualParticipants = goalData?.actual ?? totalPrimary;
+      let projectedAtEnd: number | null = null;
+      if (selectedProgram.startDate && selectedProgram.endDate && actualParticipants > 0) {
+        const start = new Date(selectedProgram.startDate + "T00:00:00");
+        const end = new Date(selectedProgram.endDate + "T00:00:00");
+        const now = new Date();
+        const elapsedMs = now.getTime() - start.getTime();
+        const totalMs = end.getTime() - start.getTime();
+        if (elapsedMs > 0 && totalMs > 0) {
+          projectedAtEnd = Math.round(actualParticipants * (totalMs / elapsedMs));
+        }
+      }
+
+      // Build inventory summary for metrics that track physical items
+      const inventorySummary = selectedProgram.metrics
+        .filter((m: any) => m.inventoryTotal != null && m.inventoryTotal > 0)
+        .map((m: any) => ({
+          name: m.name,
+          inventoryTotal: m.inventoryTotal,
+          unitCost: m.unitCost ?? null,
+          distributed: metricTotals[m.name] || 0,
+        }));
+
+      const programBudget = (selectedProgram as any).budget || 0;
+
       const res = await apiRequest("POST", "/api/report/ai-narrative", {
         persona,
         programName:        selectedProgram.name,
@@ -508,15 +534,18 @@ export default function Reports() {
         targetPopulation:   selectedProgram.targetPopulation || "",
         goals:              selectedProgram.goals || "",
         goalTarget,
-        totalParticipants:  goalData?.actual ?? totalPrimary,
+        totalParticipants:  actualParticipants,
         primaryMetricName:  participantLabel,
         geographies:        geoSummary,
         geographyList:      geoList,
         statsByGeo,
         reachPercent,
-        totalCost:          (selectedProgram as any).budget || 0,
+        totalCost:          programBudget,
         program:            selectedProgram,
         metricTotals,
+        budget:             programBudget,
+        projectedAtEnd,
+        inventorySummary,
       });
       aiNarrative = await res.json();
     } catch (err) {

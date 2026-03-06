@@ -96,6 +96,9 @@ export interface NarrativeInput {
   costPerParticipant: string | null;
   metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
   metricTotals?: Record<string, number>;
+  budget?: number | null;
+  projectedAtEnd?: number | null;
+  inventorySummary?: { name: string; inventoryTotal: number; unitCost: number | null; distributed: number }[];
 }
 
 export interface AiNarrative {
@@ -149,6 +152,7 @@ function buildPersonaInputJson(input: NarrativeInput): object {
       reachPercent: input.reachPercent || null,
     },
     financials: {
+      budget: input.budget && input.budget > 0 ? input.budget : null,
       totalCost: input.totalCost > 0 ? input.totalCost : null,
       costPerParticipant: cppNum && !isNaN(cppNum) ? cppNum : null,
       givingTiers: null,
@@ -165,6 +169,25 @@ function buildPersonaInputJson(input: NarrativeInput): object {
         ? resourceMetrics.map(m => ({ name: m.name, unit: m.unit || null, value: input.metricTotals?.[m.name] ?? null, notes: null }))
         : null,
     },
+    projection: input.projectedAtEnd != null && input.goalTarget
+      ? {
+          projectedAtEnd: input.projectedAtEnd,
+          projectedPctOfGoal: Math.round((input.projectedAtEnd / input.goalTarget) * 100),
+          onTrack: input.projectedAtEnd >= input.goalTarget,
+        }
+      : null,
+    inventory: input.inventorySummary && input.inventorySummary.length > 0
+      ? input.inventorySummary.map(i => ({
+          metricName: i.name,
+          totalOnHand: i.inventoryTotal,
+          distributed: i.distributed,
+          remaining: i.inventoryTotal - i.distributed,
+          unitCost: i.unitCost,
+          includesDonations: i.unitCost != null && input.budget
+            ? i.inventoryTotal > Math.floor(input.budget / i.unitCost)
+            : false,
+        }))
+      : null,
     allowedMath: { enableDerivedNumbers: false },
   };
 }

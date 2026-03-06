@@ -1252,6 +1252,9 @@ app.post("/api/report/ai-narrative", async (c) => {
       costPerParticipant: cppRaw,
       metrics:            body.program?.metrics   || [],
       metricTotals:       body.metricTotals       || {},
+      budget:             body.budget             ?? null,
+      projectedAtEnd:     body.projectedAtEnd     ?? null,
+      inventorySummary:   Array.isArray(body.inventorySummary) ? body.inventorySummary : undefined,
     }, persona);
 
     return c.json(narrative);

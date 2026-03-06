@@ -14,7 +14,8 @@ interface ProgramData {
   goals?: string | null;
   costPerParticipant?: string | null;
   locations?: string | null;
-  metrics: { name: string; unit: string; countsAsParticipant?: boolean }[];
+  budget?: number | null;
+  metrics: { name: string; unit: string; countsAsParticipant?: boolean; unitCost?: number | null; inventoryTotal?: number | null }[];
 }
 
 interface OrgData {
@@ -599,14 +600,29 @@ export function generateImpactStudyPdf(data: ReportData) {
   kpiData.push(["Geographies Served", uniqueGeos.size.toString(), `Across ${new Set(stats.map(s => s.geographyLevel)).size} levels`]);
 
   if (totalCost) {
-    kpiData.push(["Estimated Total Cost", formatCurrency(totalCost), `Based on ${formatCurrency(costPerParticipant!)} per ${primaryMetric.toLowerCase().replace(/s$/, "")}`]);
+    kpiData.push(["Estimated Total Cost", formatCurrency(totalCost), `Based on ${formatCurrency(costPerParticipant!)} per ${primaryMetric.toLowerCase().replace(/s(\s|$)/, "$1").trim()}`]);
   }
   if (costPerParticipant) {
-    kpiData.push([`Cost per ${primaryMetric.replace(/s$/, "")}`, formatCurrency(costPerParticipant), "Unit cost"]);
+    kpiData.push([`Cost per ${primaryMetric.replace(/s(\s|$)/, "$1").trim()}`, formatCurrency(costPerParticipant), "Unit cost"]);
   }
   if (goalTarget) {
     const pctGoal = ((totalPrimary / goalTarget) * 100).toFixed(1);
     kpiData.push(["Goal Progress", `${pctGoal}%`, `${formatNumber(totalPrimary)} of ${formatNumber(goalTarget)}`]);
+
+    // Run-rate projection
+    if (program.startDate && program.endDate && totalPrimary > 0) {
+      const start = new Date(program.startDate + "T00:00:00");
+      const end = new Date(program.endDate + "T00:00:00");
+      const now = new Date();
+      const elapsedMs = now.getTime() - start.getTime();
+      const totalMs = end.getTime() - start.getTime();
+      if (elapsedMs > 0 && totalMs > 0) {
+        const projected = Math.round(totalPrimary * (totalMs / elapsedMs));
+        const pctProjected = ((projected / goalTarget) * 100).toFixed(0);
+        const status = projected >= goalTarget ? "On track" : "Below target";
+        kpiData.push(["Projected at End Date", formatNumber(projected), `${status} · ${pctProjected}% of goal`]);
+      }
+    }
   }
 
   checkPageBreak(15 + kpiData.length * 8);
@@ -751,18 +767,39 @@ export function generateImpactStudyPdf(data: ReportData) {
   }
 
   // =========== FINANCIAL SNAPSHOT (if cost data available) ===========
-  if (costPerParticipant || totalCost) {
+  const budget = program.budget ?? null;
+  if (costPerParticipant || totalCost || budget) {
     drawSectionHeader("Financial Snapshot");
 
     const finData: string[][] = [];
-    if (totalCost) finData.push(["Estimated Total Program Cost", formatCurrency(totalCost)]);
-    if (costPerParticipant) finData.push([`Cost per ${primaryMetric.replace(/s$/, "")} Served`, formatCurrency(costPerParticipant)]);
-    if (totalPrimary) finData.push([`Total ${primaryMetric} Served`, formatNumber(totalPrimary)]);
+    if (budget) finData.push(["Program Budget", formatCurrency(budget)]);
+    if (totalCost) {
+      finData.push(["Estimated Cost to Date", formatCurrency(totalCost)]);
+      if (budget) {
+        const remaining = budget - totalCost;
+        finData.push([remaining >= 0 ? "Budget Remaining" : "Over Budget By", formatCurrency(Math.abs(remaining))]);
+      }
+    }
+    if (costPerParticipant) finData.push([`Cost per ${primaryMetric.replace(/s(\s|$)/, "$1").trim()}`, formatCurrency(costPerParticipant)]);
+    if (totalPrimary) finData.push([`Total ${primaryMetric}`, formatNumber(totalPrimary)]);
 
     Object.entries(secondaryMetrics).forEach(([name, val]) => {
       if (val > 0 && costPerParticipant) {
         const unitCost = totalCost ? totalCost / val : 0;
         finData.push([`Cost per ${name}`, unitCost > 0 ? formatCurrency(unitCost) : "N/A"]);
+      }
+    });
+
+    // Inventory / donations summary for physical-item metrics
+    const inventoryMetrics = program.metrics.filter(m => m.inventoryTotal != null && m.inventoryTotal > 0);
+    inventoryMetrics.forEach(m => {
+      finData.push([`${m.name} — Inventory on Hand`, formatNumber(m.inventoryTotal!)]);
+      if (m.unitCost && m.unitCost > 0 && budget && m.inventoryTotal! > 0) {
+        const budgetUnits = Math.floor(budget / m.unitCost);
+        if (m.inventoryTotal! > budgetUnits) {
+          const avgCost = +(budget / m.inventoryTotal!).toFixed(2);
+          finData.push([`${m.name} — Avg Cost (incl. donations)`, formatCurrency(avgCost)]);
+        }
       }
     });
 
@@ -785,7 +822,8 @@ export function generateImpactStudyPdf(data: ReportData) {
     y = (doc as any).lastAutoTable.finalY + 6;
 
     if (costPerParticipant && totalPrimary) {
-      drawParagraph(`Donor Impact: Every ${formatCurrency(costPerParticipant)} invested serves one ${primaryMetric.toLowerCase().replace(/s$/, "")} through the ${program.name} program.`);
+      const singularUnit = primaryMetric.toLowerCase().replace(/\s*served$/i, "").replace(/s$/, "");
+      drawParagraph(`Donor Impact: Every ${formatCurrency(costPerParticipant)} invested serves one ${singularUnit} through the ${program.name} program.`);
     }
   }
 
