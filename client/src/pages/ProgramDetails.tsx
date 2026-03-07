@@ -58,14 +58,17 @@ export default function ProgramDetails() {
   const { data: surveyResponses } = useSurveyResponses(programId, { refetchInterval: 10000 });
 
   const availableYears = useMemo(() => {
-    if (!allEntries) return [];
+    if (!allEntries && !surveyResponses) return [];
     const years = new Set<number>();
-    allEntries.forEach(entry => {
+    (allEntries || []).forEach(entry => {
       const year = new Date(entry.date + "T00:00:00").getFullYear();
       years.add(year);
     });
+    (surveyResponses || []).forEach((r: any) => {
+      years.add(parseTs(r.createdAt).getFullYear());
+    });
     return Array.from(years).sort((a, b) => b - a);
-  }, [allEntries]);
+  }, [allEntries, surveyResponses]);
 
   const entries = useMemo(() => {
     if (!allEntries) return allEntries;
@@ -489,7 +492,7 @@ export default function ProgramDetails() {
                   const metricSpent = distributed * cpu;
                   const metricPct = budget > 0 ? Math.round((metricSpent / budget) * 100) : 0;
                   const inventory  = m.inventoryRemaining ?? m.inventoryTotal ?? null;
-                  const canAfford  = Math.floor(budgetRemaining / cpu);
+                  const canAfford  = Math.max(0, Math.floor(budgetRemaining / cpu));
 
                   const goalsText: string | null = (program as any).goals ?? null;
                   const goalMatch = goalsText?.match(/(\d[\d,]*)/);

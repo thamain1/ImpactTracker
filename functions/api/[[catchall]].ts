@@ -879,15 +879,21 @@ app.get("/api/impact/export", async (c) => {
   if (isNaN(programId)) return c.json({ message: "programId is required" }, 400);
   if (!(await userOwnsProgram(supabase, user.id, programId))) return c.json({ message: "Not authorized" }, 403);
 
+  const yearParam = c.req.query("year");
+
   const prog = await getProgramWithMetrics(supabase, programId);
   if (!prog) return c.json({ message: "Program not found" }, 404);
-  const { data: entryRows } = await supabase
-    .from("impact_entries").select("*").eq("program_id", programId).order("created_at", { ascending: false });
+  let entryQuery = supabase
+    .from("impact_entries").select("*").eq("program_id", programId);
+  if (yearParam && yearParam !== "all") {
+    entryQuery = entryQuery.gte("date", `${yearParam}-01-01`).lte("date", `${yearParam}-12-31`);
+  }
+  const { data: entryRows } = await entryQuery.order("created_at", { ascending: false });
   const entries = (entryRows || []).map((e: any) => toCamel(e));
   const metricNames = (prog as any).metrics.map((m: any) => m.name);
   const header = ["Date", "Source", "Geography Level", "Geography Value", "ZIP Code", "Email", "Sex", "Age Range", "Family Size", "Household Income", "Demographics", "Outcomes", ...metricNames].join(",");
   const csvEscape = (v: string) => `"${(v || "").replace(/"/g, '""')}"`;
-  const csvText = (v: string) => v ? `="'${(v || "").replace(/"/g, '""')}"` : "";
+  const csvText = (v: string) => v ? `"'${(v || "").replace(/"/g, '""')}"` : "";
   const rows = entries.map((entry: any) => {
     const mv = entry.metricValues as Record<string, number>;
     const metricCols = metricNames.map((n: string) => mv[n] || 0);
@@ -895,12 +901,15 @@ app.get("/api/impact/export", async (c) => {
   });
 
   // Append survey_responses as individual check-in rows
-  const { data: surveyRows } = await supabase
+  let surveyQuery = supabase
     .from("survey_responses")
     .select("metric_id, quantity_delivered, created_at, email, sex, age_range, family_size, household_income")
     .eq("program_id", programId)
-    .eq("respondent_type", "participant")
-    .order("created_at", { ascending: false });
+    .eq("respondent_type", "participant");
+  if (yearParam && yearParam !== "all") {
+    surveyQuery = surveyQuery.gte("created_at", `${yearParam}-01-01T00:00:00`).lt("created_at", `${Number(yearParam) + 1}-01-01T00:00:00`);
+  }
+  const { data: surveyRows } = await surveyQuery.order("created_at", { ascending: false });
 
   if (surveyRows && surveyRows.length > 0) {
     // Build metric_id → name lookup
@@ -1317,7 +1326,7 @@ app.delete("/api/organizations/:orgId/service-areas/:id", async (c) => {
   const user = c.get("user");
   const orgId = Number(c.req.param("orgId"));
   if (!(await userOwnsOrg(supabase, user.id, orgId))) return c.json({ message: "Not authorized" }, 403);
-  await supabase.from("service_areas").delete().eq("id", Number(c.req.param("id")));
+  await supabase.from("service_areas").delete().eq("id", Number(c.req.param("id"))).eq("org_id", orgId);
   return c.body(null, 204);
 });
 
@@ -1566,6 +1575,12 @@ app.post("/api/survey/:programId/respond", async (c) => {
       household_income: input.householdIncome ?? null,
     };
 
+    // Look up the launching program's org_id so we can validate all referenced program IDs
+    const { data: launchProg } = await supabase
+      .from("programs").select("org_id").eq("id", programId).maybeSingle();
+    if (!launchProg) return c.json({ message: "Program not found" }, 404);
+    const launchOrgId = launchProg.org_id;
+
     if (input.respondentType === "supporter") {
       // Supporters: log to the launching program only
       const { error } = await supabase.from("survey_responses").insert({ ...base, program_id: programId });
@@ -1573,6 +1588,23 @@ app.post("/api/survey/:programId/respond", async (c) => {
     } else {
       // Participants: if allocations provided, insert one row per allocation with metric_id + quantity_delivered
       const allocations = (input.allocations ?? []).filter((a: any) => a.qty > 0);
+
+      // Validate that all allocation programIds belong to the same org as the launching program
+      const allProgramIds = [
+        ...new Set([
+          ...allocations.map((a: any) => a.programId as number),
+          ...((input as any).selectedProgramIds || []) as number[],
+        ].filter(Boolean)),
+      ];
+      if (allProgramIds.length > 0) {
+        const { data: progRows } = await supabase
+          .from("programs").select("id, org_id").in("id", allProgramIds);
+        const invalid = (progRows || []).filter((p: any) => p.org_id !== launchOrgId);
+        if (invalid.length > 0 || (progRows || []).length !== allProgramIds.length) {
+          return c.json({ message: "One or more program IDs do not belong to this organization" }, 403);
+        }
+      }
+
       if (allocations.length > 0) {
         const rows = allocations.map((a: any) => ({
           ...base,

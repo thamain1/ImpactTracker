@@ -446,7 +446,9 @@ export default function Reports() {
   }, [surveyResponses, selectedProgram, selectedYear]);
 
   const handleCsvDownload = async () => {
-    const res = await apiRequest("GET", `${api.impact.exportCsv.path}?programId=${programId}`);
+    let csvUrl = `${api.impact.exportCsv.path}?programId=${programId}`;
+    if (selectedYear !== "all") csvUrl += `&year=${selectedYear}`;
+    const res = await apiRequest("GET", csvUrl);
     if (!res.ok) return;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -534,7 +536,10 @@ export default function Reports() {
       if (selectedProgram.startDate && selectedProgram.endDate && actualParticipants > 0) {
         const start = new Date(selectedProgram.startDate + "T00:00:00");
         const end = new Date(selectedProgram.endDate + "T00:00:00");
-        const now = new Date();
+        // For historical years, use Dec 31 of that year instead of today
+        const now = selectedYear !== "all" && parseInt(selectedYear) < new Date().getFullYear()
+          ? new Date(`${selectedYear}-12-31T23:59:59`)
+          : new Date();
         const elapsedMs = now.getTime() - start.getTime();
         const totalMs = end.getTime() - start.getTime();
         if (elapsedMs > 0 && totalMs > 0) {
@@ -1168,13 +1173,13 @@ export default function Reports() {
                   <div className="flex items-center justify-between gap-2 text-sm mb-1">
                     <span className="text-muted-foreground">Population Reached</span>
                     <span className="font-bold text-emerald-600">
-                      {totalImpact > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
+                      {totalImpact > 0 && totalCensusPop > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
                     <div
                       className="bg-primary rounded-full h-2.5 transition-all"
-                      style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }}
+                      style={{ width: `${Math.min(totalImpact > 0 && totalCensusPop > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -1191,13 +1196,13 @@ export default function Reports() {
                   <div className="flex items-center justify-between gap-2 text-sm mb-1">
                     <span className="text-muted-foreground">Target Age Reached</span>
                     <span className="font-bold text-emerald-600">
-                      {totalImpact > 0 ? `${(Math.round((totalImpact / totalAgePop) * 10000) / 100)}%` : "0%"}
+                      {totalImpact > 0 && totalAgePop > 0 ? `${(Math.round((totalImpact / totalAgePop) * 10000) / 100)}%` : "0%"}
                     </span>
                   </div>
                   <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
                     <div
                       className="bg-emerald-500 rounded-full h-2.5 transition-all"
-                      style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalAgePop) * 100 : 0, 100)}%` }}
+                      style={{ width: `${Math.min(totalImpact > 0 && totalAgePop > 0 ? (totalImpact / totalAgePop) * 100 : 0, 100)}%` }}
                     />
                   </div>
                 </div>
@@ -1610,12 +1615,12 @@ export default function Reports() {
                       <div className="flex items-center justify-between text-sm mb-1">
                         <span className="text-muted-foreground">Population Reached</span>
                         <span className="font-bold text-emerald-600">
-                          {totalImpact > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
+                          {totalImpact > 0 && totalCensusPop > 0 ? `${(Math.round((totalImpact / totalCensusPop) * 10000) / 100)}%` : "0%"}
                         </span>
                       </div>
                       <div className="w-full bg-slate-100 rounded-full h-2.5 mt-2">
                         <div className="bg-primary rounded-full h-2.5 transition-all"
-                          style={{ width: `${Math.min(totalImpact > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }} />
+                          style={{ width: `${Math.min(totalImpact > 0 && totalCensusPop > 0 ? (totalImpact / totalCensusPop) * 100 : 0, 100)}%` }} />
                       </div>
                     </div>
                   )}
